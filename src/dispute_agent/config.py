@@ -31,7 +31,5 @@ class Settings(BaseModel):
     max_tool_calls: int = 6  # agent-mode budget per case (invalid and refused calls count too)
     max_steps: int = 12  # hard step budget for one case
     max_draft_attempts: int = 2  # self-check retries before escalation
-    human_review_amount: float = 500.0  # refunds above this always go to a human
     min_confidence: float = 0.6  # below this, escalate instead of deciding
-    filing_window_days: int = 120  # mirrors POL-GEN-02 in policy v1
     kb_top_k: int = 4

@@ -98,14 +98,17 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
 
 
 def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: Path = ROOT / "eval" / "golden.jsonl",
-             workers: int = 1, evidence: str | None = None, no_fill: bool = False) -> dict:
-    overrides = {k: v for k, v in {"model": model, "evidence_mode": evidence}.items() if v}
+             workers: int = 1, evidence: str | None = None, no_fill: bool = False, kb_version: str | None = None) -> dict:
+    golden_rows = load_golden(golden_path)
+    # labels are only valid for the policy version they were made under; default v1 (seed + golden_v1)
+    pinned = kb_version or golden_rows[0].get("policy_version", "v1")
+    overrides = {k: v for k, v in {"model": model, "evidence_mode": evidence, "kb_version": pinned}.items() if v}
     if no_fill:
         overrides["coverage_fill"] = False
     settings = Settings(**overrides)
     if settings.evidence_mode == "agent" and brain_kind == "rules":
         raise SystemExit("--evidence agent needs an LLM brain (--brain llm)")
-    golden = load_golden(golden_path)
+    golden = golden_rows
     ledger = build_ledger(golden)
     kb = KnowledgeBase(settings.kb_dir, settings.kb_version)
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -171,10 +174,11 @@ def main() -> None:
     ap.add_argument("--evidence", choices=["plan", "agent"], default=None, help="evidence gathering driver (default: settings)")
     ap.add_argument("--repeats", type=int, default=1, help="run the whole set N times and report mean/std + flaky cases")
     ap.add_argument("--no-fill", action="store_true", help="ablation: agent mode without code coverage fills")
+    ap.add_argument("--kb-version", default=None, help="policy version (default: the golden set's policy_version, else v1)")
     args = ap.parse_args()
 
     if args.repeats > 1:
-        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill) for _ in range(args.repeats)]
+        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version) for _ in range(args.repeats)]
         agg = aggregate(reports) | {"brain": reports[0]["summary"]["brain"], "golden": args.golden.name}
         out_dir = ROOT / "eval" / "results"
         out_dir.mkdir(exist_ok=True)
@@ -188,7 +192,7 @@ def main() -> None:
         print(f"\nReport: {out.relative_to(ROOT)}")
         return
 
-    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill)
+    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version)
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
     out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{re.sub(r'[^A-Za-z0-9.-]+', '_', report['summary']['brain'])}.json"

@@ -27,8 +27,8 @@ def test_wrong_amount_refunds_difference_only():
 
 
 def test_kb_loads_latest_version_and_filters_by_type():
-    kb = KnowledgeBase(Settings().kb_dir)
-    assert kb.version == "v1"
+    assert KnowledgeBase(Settings().kb_dir).version == "v2"  # "latest"
+    kb = KnowledgeBase(Settings().kb_dir, "v1")
     hits = kb.search("charged twice duplicate payment", k=2, dispute_type="duplicate_charge")
     assert hits[0].clause_id == "POL-DUP-01"
     assert all({"duplicate_charge", "all"} & set(h.applies_to) for h in hits)

@@ -4,7 +4,11 @@ Clause format inside kb/policies/<version>/*.md:
 
     ## POL-DUP-01: Duplicate charge refunds
     Applies to: duplicate_charge
+    Parameters: duplicate_window_days=3        (optional; machine-readable values the guards enforce)
     <clause text...>
+
+Parameters make the policy document the single source of truth: publishing a new version with a different value
+changes the agent's behaviour without a code change.
 """
 
 from __future__ import annotations
@@ -30,6 +34,8 @@ class KnowledgeBase:
         if not versions:
             raise FileNotFoundError(f"No policy versions in {kb_dir}")
         self.version = versions[-1] if version == "latest" else version
+        self.params: dict[str, float] = {}
+        self.param_source: dict[str, str] = {}  # parameter -> clause id that defines it
         self.clauses = self._load(kb_dir / self.version)
         self._by_id = {c.clause_id: c for c in self.clauses}
         self._bm25 = BM25Okapi([_tokens(f"{c.title} {c.text} {' '.join(c.applies_to)}") for c in self.clauses])
@@ -45,10 +51,24 @@ class KnowledgeBase:
                 if body.lower().startswith("applies to:"):
                     first, _, body = body.partition("\n")
                     applies = [a.strip() for a in first.split(":", 1)[1].split(",") if a.strip()]
+                    body = body.strip()
+                if body.lower().startswith("parameters:"):
+                    first, _, body = body.partition("\n")
+                    for kv in first.split(":", 1)[1].split(","):
+                        key, _, value = kv.strip().partition("=")
+                        if key in self.params:
+                            raise ValueError(f"parameter {key} defined twice ({self.param_source[key]}, {m['id']})")
+                        self.params[key], self.param_source[key] = float(value), m["id"]
                 clauses.append(
                     PolicyClause(clause_id=m["id"], version=self.version, title=m["title"].strip(), text=body.strip(), applies_to=applies)
                 )
         return clauses
+
+    def param(self, name: str) -> float:
+        """A policy parameter of this version. Missing parameters are an error: guards must never run on a guess."""
+        if name not in self.params:
+            raise KeyError(f"policy {self.version} defines no parameter {name!r}")
+        return self.params[name]
 
     def get(self, clause_id: str) -> PolicyClause | None:
         return self._by_id.get(clause_id)

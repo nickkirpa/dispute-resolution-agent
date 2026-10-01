@@ -1,4 +1,4 @@
-# Northwind Bank: card dispute policy (fictional), version 1
+# Northwind Bank: card dispute policy (fictional), version 2 (effective 2026-10-01)
 
 ## POL-GEN-01: Scope of card disputes
 Applies to: all
@@ -6,8 +6,8 @@ This policy covers disputes about card transactions on Northwind consumer accoun
 
 ## POL-GEN-02: Filing window
 Applies to: all
-Parameters: filing_window_days=120
-A dispute must be raised within 120 days of the transaction date. Disputes raised after 120 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.
+Parameters: filing_window_days=90
+A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.
 
 ## POL-GEN-03: Transaction must be identified
 Applies to: all
@@ -15,5 +15,5 @@ If no transaction on the customer's account matches the merchant, amount or date
 
 ## POL-GEN-04: Human review threshold
 Applies to: all
-Parameters: human_review_amount=500
-Any refund above 500 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.
+Parameters: human_review_amount=300
+Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.

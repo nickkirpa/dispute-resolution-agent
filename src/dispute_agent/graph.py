@@ -99,6 +99,7 @@ def build_graph(deps: Deps, checkpointer=None):
             fill_coverage(box, ran_policy_search=False)
         evidence, clauses = finalize(box)
         return _step("gather_evidence", state, evidence=evidence, clauses=clauses, kb_version=deps.kb.version,
+                     policy_params=dict(deps.kb.params),
                      evidence_mode=mode, tool_calls=box.calls, coverage_fills=fills, fallback_error=error,
                      usage=deps.brain.usage.model_copy())
 
@@ -118,11 +119,12 @@ def build_graph(deps: Deps, checkpointer=None):
             p = deps.brain.decide(state)
         except LLMRefusal as e:
             return _escalate("decide", state, f"model refusal: {e}", deps)
-        decision, needs_human, reason = p.decision, False, ""
+        decision, reasons = p.decision, []  # every guard that fires is recorded (audit), not just the last one
 
         # guard 1: no refund (or reject) without the evidence policy requires
         if state.missing_evidence and decision in (Decision.REFUND, Decision.REJECT):
-            decision, reason = Decision.REQUEST_INFO, "guard: required evidence missing"
+            decision = Decision.REQUEST_INFO
+            reasons.append("guard: required evidence missing")
 
         # guard 2: money is computed by code, never by the model
         refund = 0.0
@@ -131,7 +133,7 @@ def build_graph(deps: Deps, checkpointer=None):
             dups = state.evidence_of("duplicate_transactions")
             refund = compute_refund(state.dispute_type, state.claim, matching, dups[0].data["groups"] if dups else [])
             if refund <= 0:
-                needs_human, reason = True, "guard: refund proposed but amount computes to 0"
+                reasons.append("guard: refund proposed but amount computes to 0")
 
         # guard 2b: a refund must not contradict hard evidence -> a human looks at the conflict (no silent override)
         if decision == Decision.REFUND:
@@ -141,18 +143,20 @@ def build_graph(deps: Deps, checkpointer=None):
                 conflicts.append("no duplicate charges found")
             if state.dispute_type == DisputeType.REFUND_NOT_PROCESSED and state.evidence_of("merchant_refunds"):
                 conflicts.append("merchant credit already posted")
-            if window and window[0].data["days_since_transaction"] > s.filing_window_days:
-                conflicts.append(f"filed after {s.filing_window_days} days")
+            window_days = deps.kb.param("filing_window_days")
+            if window and window[0].data["days_since_transaction"] > window_days:
+                conflicts.append(f"filed after {window_days:.0f} days")
             if conflicts:
-                needs_human, reason = True, f"guard: refund contradicts evidence ({'; '.join(conflicts)})"
+                reasons.append(f"guard: refund contradicts evidence ({'; '.join(conflicts)})")
 
         # guard 3: thresholds
-        if decision == Decision.REFUND and refund > s.human_review_amount:
-            needs_human, reason = True, f"guard: refund {refund:.2f} > {s.human_review_amount:.0f} EUR (POL-GEN-04)"
+        threshold = deps.kb.param("human_review_amount")
+        if decision == Decision.REFUND and refund > threshold:
+            reasons.append(f"guard: refund {refund:.2f} > {threshold:.0f} EUR ({deps.kb.param_source['human_review_amount']})")
         if min(p.confidence, state.type_confidence) < s.min_confidence:
-            needs_human, reason = True, f"guard: low confidence ({min(p.confidence, state.type_confidence):.2f})"
-        if decision == Decision.ESCALATE:
-            needs_human, reason = True, reason or p.rationale
+            reasons.append(f"guard: low confidence ({min(p.confidence, state.type_confidence):.2f})")
+        needs_human = decision == Decision.ESCALATE or any(not r.startswith("guard: required evidence") for r in reasons)
+        reason = "; ".join(reasons) or (p.rationale if decision == Decision.ESCALATE else "")
 
         return _step("decide", state, decision=decision, decision_confidence=p.confidence, refund_amount=refund,
                      rationale=p.rationale, cited_clauses=p.cited_clauses, needs_human=needs_human,

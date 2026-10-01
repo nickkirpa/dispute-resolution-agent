@@ -85,6 +85,7 @@ class CaseState(BaseModel):
     evidence: Annotated[list[Evidence], operator.add] = Field(default_factory=list)
     clauses: list[PolicyClause] = Field(default_factory=list)
     kb_version: str | None = None
+    policy_params: dict[str, float] = Field(default_factory=dict)  # parameter values of kb_version used for this case
     evidence_mode: str = ""  # plan | agent | plan_fallback
     tool_calls: list[dict] = Field(default_factory=list)  # audit trail of every tool call (args, reason, observation)
     coverage_fills: list[str] = Field(default_factory=list)  # checks code had to run because the agent skipped them

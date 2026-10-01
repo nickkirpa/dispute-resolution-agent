@@ -94,7 +94,8 @@ class ToolBox:
         if not a.merchant or a.amount is None:
             raise ValueError("find_duplicates needs merchant and amount")
         self.dup_checked = True
-        groups = self.ledger.find_duplicates(self.state.customer_id, a.merchant, a.amount)
+        window = int(self.kb.param("duplicate_window_days"))
+        groups = self.ledger.find_duplicates(self.state.customer_id, a.merchant, a.amount, within_days=window)
         if groups:
             self.evidence.append(Evidence(source="ledger", kind="duplicate_transactions",
                                           summary=f"{len(groups[0])} identical charges within 3 days", data={"groups": groups}))

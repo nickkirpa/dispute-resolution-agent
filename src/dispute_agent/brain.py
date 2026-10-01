@@ -114,8 +114,10 @@ class RuleBrain:
             return DecisionProposal(decision=Decision.REQUEST_INFO, confidence=0.9, rationale="Required evidence is missing.", cited_clauses=cites)
 
         window = state.evidence_of("filing_window")
-        if window and window[0].data.get("days_since_transaction", 0) > 120:
-            return DecisionProposal(decision=Decision.REJECT, confidence=0.9, rationale="Filed after the 120-day window.", cited_clauses=["POL-GEN-02"])
+        limit = state.policy_params["filing_window_days"]
+        if window and window[0].data.get("days_since_transaction", 0) > limit:
+            return DecisionProposal(decision=Decision.REJECT, confidence=0.9, rationale=f"Filed after the {limit:.0f}-day window.",
+                                    cited_clauses=["POL-GEN-02"])
 
         history = state.evidence_of("customer_history")
         hist = history[0].data if history else {}
