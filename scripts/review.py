@@ -5,6 +5,7 @@ Shows every auto-flagged item plus a random sample per scenario, and writes your
 
     uv run python scripts/review.py golden            # eval/golden_v1.jsonl
     uv run python scripts/review.py router            # data/synthetic/not_received.jsonl
+    uv run python scripts/review.py shift --sample 8  # eval/golden_policy_shift.jsonl (40 cases: review all)
     uv run python scripts/review.py golden --sample 3 # per-scenario sample size (flagged items are always shown)
     uv run python scripts/review.py golden --flags-only
     uv run python scripts/review.py golden --stats    # progress only, no prompts
@@ -24,7 +25,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = {"golden": ROOT / "eval" / "golden_v1.jsonl", "router": ROOT / "data" / "synthetic" / "not_received.jsonl"}
+FILES = {"golden": ROOT / "eval" / "golden_v1.jsonl", "router": ROOT / "data" / "synthetic" / "not_received.jsonl",
+         "shift": ROOT / "eval" / "golden_policy_shift.jsonl"}
 
 CONTACT = r"\b(contact\w*|emailed|e-mailed|called|phoned|messaged|reached out|spoke|wrote to|complained to|asked them|told them)\b"
 TWICE = r"\b(twice|two times|double|duplicate|again|second time|2 times)\b"
@@ -48,17 +50,17 @@ def dates_in_text(t: str) -> set[tuple[int, int]]:
 
 def golden_flags(r: dict) -> list[str]:
     """Cheap faithfulness heuristics per scenario. A flag means 'look carefully', not 'wrong'."""
-    t, sc = r["narrative"].lower(), r["scenario"]
+    t, sc, typ = r["narrative"].lower(), r["scenario"], r["expected_type"]
     flags = []
     if sc == "not_received/request_info_no_contact" and re.search(CONTACT, t):
         flags.append("no-contact case mentions contact")
-    if sc.startswith("not_received/") and sc != "not_received/request_info_no_contact" and not re.search(CONTACT, t):
+    if typ == "not_received" and sc != "not_received/request_info_no_contact" and not re.search(CONTACT, t):
         flags.append("merchant contact not stated")
-    if sc.startswith("duplicate/") and not re.search(TWICE, t):
+    if typ == "duplicate_charge" and not re.search(TWICE, t):
         flags.append("does not say charged twice")
-    if sc.startswith("unauthorized/") and not re.search(UNAUTH, t):
+    if typ == "unauthorized" and not re.search(UNAUTH, t):
         flags.append("does not say payment unrecognised")
-    if sc.startswith("refund_not_processed/") and "refund" not in t:
+    if typ == "refund_not_processed" and "refund" not in t:
         flags.append("does not mention a refund")
     if sc == "wrong_amount/request_info_no_expected" and len(set(re.findall(AMOUNT, t))) > 1:
         flags.append("states a second amount (could be read as the expected price)")
@@ -101,7 +103,7 @@ def save(path: Path, rows: list[dict]) -> None:
 
 def show(kind: str, r: dict, flags: list[str], pos: str) -> None:
     print("\n" + "=" * 78)
-    if kind == "golden":
+    if kind in ("golden", "shift"):
         led = r["ledger"]["transactions"]
         case_txns = [t for t in led if t[2] not in NOISE_MERCHANTS]
         refund = f" {r['expected_refund']:.2f} EUR" if r["expected_refund"] else ""
@@ -123,6 +125,7 @@ def show(kind: str, r: dict, flags: list[str], pos: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("kind", choices=list(FILES))
+    # golden and shift share the golden display + flags
     ap.add_argument("--sample", type=int, default=3, help="random unflagged items per scenario/angle to review")
     ap.add_argument("--flags-only", action="store_true")
     ap.add_argument("--stats", action="store_true")
@@ -131,8 +134,8 @@ def main() -> None:
 
     path = FILES[args.kind]
     rows = load(path)
-    flag_fn = golden_flags if args.kind == "golden" else router_flags
-    group = (lambda r: r["scenario"]) if args.kind == "golden" else (lambda r: r["angle"])
+    flag_fn = router_flags if args.kind == "router" else golden_flags
+    group = (lambda r: r["angle"]) if args.kind == "router" else (lambda r: r["scenario"])
 
     status = Counter(r.get("review_status", "unreviewed") for r in rows)
     flagged_all = [r for r in rows if flag_fn(r)]

@@ -9,3 +9,4 @@ eval/results/
 data/router_*.jsonl
 data/router/
 data/cases.sqlite
+data/embeddings_cache.json

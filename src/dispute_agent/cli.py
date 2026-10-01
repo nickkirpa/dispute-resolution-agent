@@ -27,7 +27,7 @@ from .brain import RuleBrain
 from .config import ROOT, Settings
 from .graph import Deps, build_graph
 from .state import CHECKPOINT_TYPES, CaseState
-from .tools import KnowledgeBase
+from .tools import KnowledgeBase, build_kb
 
 DEFAULT_DB = ROOT / "data" / "cases.sqlite"
 
@@ -36,7 +36,7 @@ def run_config(args, settings: Settings) -> dict:
     """Everything needed to rebuild the same agent later. kb_version is resolved ("latest" -> "v2") on purpose."""
     return {"brain": args.brain, "provider": settings.provider, "model": settings.model,
             "evidence_mode": settings.evidence_mode, "effort_by_step": settings.effort_by_step,
-            "kb_version": KnowledgeBase(settings.kb_dir, settings.kb_version).version}
+            "kb_version": KnowledgeBase(settings.kb_dir, settings.kb_version).version, "retrieval_mode": settings.retrieval_mode}
 
 
 def _app(config: dict, conn: sqlite3.Connection):
@@ -44,7 +44,8 @@ def _app(config: dict, conn: sqlite3.Connection):
     from eval.fixtures import build_fixture_ledger  # demo data; swap for data/ledger.duckdb later
 
     settings = Settings(provider=config["provider"], model=config["model"], evidence_mode=config["evidence_mode"],
-                        effort_by_step=config.get("effort_by_step", {}), kb_version=config["kb_version"])
+                        effort_by_step=config.get("effort_by_step", {}), kb_version=config["kb_version"],
+                        retrieval_mode=config.get("retrieval_mode", "bm25"))
     ledger = build_fixture_ledger()
     if config["brain"] == "rules":
         brain = RuleBrain(known_merchants=ledger.merchants())
@@ -52,7 +53,7 @@ def _app(config: dict, conn: sqlite3.Connection):
         from .llm_brain import make_llm_brain
 
         brain = make_llm_brain(settings)
-    kb = KnowledgeBase(settings.kb_dir, settings.kb_version)
+    kb = build_kb(settings)
     deps = Deps(brain=brain, ledger=ledger, kb=kb, settings=settings, human_in_loop=True)
     serde = JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)
     return build_graph(deps, checkpointer=SqliteSaver(conn, serde=serde))

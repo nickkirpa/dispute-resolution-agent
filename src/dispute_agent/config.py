@@ -33,6 +33,7 @@ class Settings(BaseModel):
     price_model: str | None = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_PRICE_MODEL"))
     kb_dir: Path = ROOT / "kb" / "policies"
     kb_version: str = "latest"
+    retrieval_mode: str = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_RETRIEVAL", "bm25"))  # bm25 | dense | hybrid
     evidence_mode: str = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_EVIDENCE", "plan"))  # plan | agent
     coverage_fill: bool = True  # agent mode: code runs policy-critical checks the agent skipped (False = ablation)
     max_tool_calls: int = 6  # agent-mode budget per case (invalid and refused calls count too)

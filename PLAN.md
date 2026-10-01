@@ -100,9 +100,18 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
       general clauses); 0 of 278 dropped citations were expected clauses; citation recall 99.6% → 100%
 
 ### Days 6–7: retrieval and a living knowledge base
-- [ ] Hybrid retrieval: BM25 plus embeddings plus a reranker. Build a labelled query→clause set and report recall@k and MRR
-- [ ] Policy v2 (for example, a changed refund window). Incremental re-indexing; tests show the agent applies v2 and cites v2 clause ids
-- [ ] Record which KB version each decision used (audit trail)
+- [x] Hybrid retrieval: BM25 + embeddings (text-embedding-3-small via LiteLLM) fused with Reciprocal Rank Fusion
+      (`KnowledgeBase(mode=bm25|dense|hybrid)`, `DISPUTE_AGENT_RETRIEVAL`, eval `--retrieval`). Query set: 156 golden
+      complaints → their expected type-specific clauses (`eval/run_retrieval_eval.py`). Reranker not added: with type
+      filtering the right clause is already in the top 3 every time (see Findings)
+- [x] Policy thresholds moved from code into `Parameters:` lines of the policy itself; policy **v2** published
+      (90-day window, 300 EUR review threshold, 24 servicing clauses as distractors, `kb/policies/CHANGELOG.md`)
+- [x] Incremental re-indexing: content-hash embedding cache; v1 → v2 re-embeds 26 clauses and reuses 11 (tested)
+- [x] Policy-change eval: 40 human-reviewed boundary cases (`golden_policy_shift.jsonl`) + deterministic v2 relabelling
+      (`scripts/relabel_for_policy.py`). Same code, agent mode: **40/40 under v1 and 40/40 under v2, 32 decisions changed
+      exactly as the policy change requires, 8 controls unchanged**. Tests show the same case flips v1→v2
+- [x] Audit trail: every case records `kb_version`, the `policy_params` it used, the version of each clause, and its
+      `run_config` (a case keeps its policy version on resume)
 
 ### Days 8–9: deep-learning router
 - [ ] Fine-tune ModernBERT or DeBERTa-v3 (PyTorch + HF) on Banking77→DisputeType (plus the synthetic not_received set).
@@ -136,6 +145,15 @@ Write down what broke and what fixed it. This is README and interview material.
   the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
   didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
   On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-02: policy update without code change.** Moving thresholds into the policy documents was the prerequisite:
+  before that, publishing "90 days" in the text would have changed nothing, because code still checked 120. After it,
+  the agent applied v2 on the policy-change set with 40/40 correct and 32/32 expected flips. The LLM read the new
+  numbers from the clause text, and the code guards read them from the clause parameters, so both agree by construction.
+- **2026-10-02: retrieval.** Filtered by dispute type (how the agent searches), every mode puts the right clause in the
+  top 3 (100%). Recall@1 is only ~66% because sibling clauses compete (refund vs "not a duplicate", refund vs "contact
+  the shop first"), and the complaint text can't settle that; the evidence does, which is why code checks
+  applicability. Unfiltered (37 clauses compete), embeddings matter: recall@3 bm25 0.66 → dense 0.79 / hybrid 0.80,
+  MRR 0.54 → 0.62 / 0.64. A hash "embedder" is far worse than BM25 (0.39), so quality needs real embeddings.
 - **2026-10-02: more reasoning made the agent worse here.** gpt-5.4-mini's default is *no* reasoning (0 reasoning tokens;
   `minimal` is rejected by LiteLLM). One run each on golden_v1:
   plan/none 99.5% · plan/decide=medium 98.0% · plan/all=low 95.6% · agent/none 100% · agent/decide+action=medium 99.0%.

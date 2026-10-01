@@ -59,6 +59,23 @@ What this shows:
   evidence guards hold regardless of what the agent does.
 - *Unsafe refund* means money paid where policy says no. It is 0 in every configuration.
 
+### Policy update without code change (policy-change set: 40 human-reviewed boundary cases)
+
+Policy v2 shortens the filing window (120 → 90 days) and lowers the human-review threshold (500 → 300 EUR). The rule
+values live in the policy documents (`Parameters:` lines), so the same code applies whichever version is active.
+
+| Run (agent mode, gpt-5.4-mini) | Correct | Decisions changed vs v1 |
+|---|---|---|
+| policy v1 | 40/40 | – |
+| policy v2 | 40/40 | **32/32 expected flips** (16 refund → reject, 16 refund → escalate); 8 controls unchanged |
+
+### Policy retrieval (156 queries, policy v2 with 37 clauses)
+
+| Candidates | BM25 recall@3 | Dense recall@3 | Hybrid (RRF) recall@3 | Hybrid MRR |
+|---|---|---|---|---|
+| filtered to the dispute type (agent default) | 1.00 | 1.00 | 1.00 | 0.83 |
+| all clauses compete | 0.66 | 0.79 | **0.80** | **0.64** |
+
 Caveats: synthetic narratives (human-reviewed), a fictional policy, one model. Labels are correct by construction (scenarios
 are built in code; the LLM writes only the complaint text).
 

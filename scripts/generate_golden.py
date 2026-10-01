@@ -215,9 +215,58 @@ def ref_already_credited(rng):
                 [(m, p, d, "online"), (m, -p, d + timedelta(days=rng.randint(5, 20)), "online")], must_mention=[p])
 
 
+# ---- policy-shift suite: cases inside the bands where policy v1 and v2 disagree, plus unchanged controls.
+# Labels below are v1 labels; scripts/relabel_for_policy.py derives the v2 labels.
+
+def shift_nr_window(rng):
+    m, item, lo, hi = rng.choice(GOODS)
+    p, d = money(rng, lo, min(hi, 280)), recent(rng, 95, 118)
+    return Case("shift/not_received_95_118_days", "not_received", "refund", ["POL-NR-01"], p,
+                {"merchant": m, "item": item, "amount": p, "date": d, "claim": "the order never arrived",
+                 "contacted_merchant": "YES - they contacted the merchant several times without resolution"},
+                [(m, p, d, "online")], must_mention=[p])
+
+
+def shift_dup_window(rng):
+    m, item, lo, hi = rng.choice(GOODS)
+    p, d = money(rng, lo, min(hi, 280)), recent(rng, 95, 118)
+    return Case("shift/duplicate_95_118_days", "duplicate_charge", "refund", ["POL-DUP-01"], p,
+                {"merchant": m, "item": item, "amount": p, "date": d, "claim": "they were charged twice for the same order"},
+                [(m, p, d, "online"), (m, p, d + timedelta(days=1), "online")], must_mention=[p])
+
+
+def shift_una_mid_value(rng):
+    m, item, lo, hi = rng.choice(TRAVEL[:2])
+    p, d = money(rng, 310, 490), recent(rng, 2, 40)
+    return Case("shift/unauthorized_310_490_eur", "unauthorized", "refund", ["POL-UNA-01"], p,
+                {"merchant": m, "amount": p, "date": d, "claim": "they do not recognise this payment and did not make it"},
+                [(m, p, d, "online")], must_mention=[p])
+
+
+def shift_ref_mid_value(rng):
+    m, item, lo, hi = rng.choice(TRAVEL[:2])
+    p, d = money(rng, 310, 480), recent(rng, 20, 80)
+    return Case("shift/refund_not_processed_310_480_eur", "refund_not_processed", "refund", ["POL-REF-01"], p,
+                {"merchant": m, "item": item, "amount": p, "date": d,
+                 "claim": "the merchant confirmed a refund for a cancelled booking but it has not arrived"},
+                [(m, p, d, "online")], must_mention=[p])
+
+
+def shift_control(rng):
+    m, item, lo, hi = rng.choice(GOODS)
+    p, d = money(rng, lo, min(hi, 280)), recent(rng, 20, 80)
+    return Case("shift/control_unchanged", "not_received", "refund", ["POL-NR-01"], p,
+                {"merchant": m, "item": item, "amount": p, "date": d, "claim": "the order never arrived",
+                 "contacted_merchant": "YES - they contacted the merchant and got no answer"},
+                [(m, p, d, "online")], must_mention=[p])
+
+
+SUITES = {}  # filled after SCENARIOS is defined
+
 SCENARIOS = [dup_refund, dup_subscription_trap, dup_high_value, dup_late, dup_no_txn, nr_refund, nr_no_contact, nr_late,
              nr_high_value, una_refund, una_high_value, una_repeat, una_no_txn, amt_refund, amt_no_expected, ref_refund,
              ref_already_credited]
+SUITES = {"v1": SCENARIOS, "policy_shift": [shift_nr_window, shift_dup_window, shift_una_mid_value, shift_ref_mid_value, shift_control]}
 
 
 # ------------------------------------------------------------------ narrative writing
@@ -273,7 +322,7 @@ def write_case(i: int, case: Case, seed: int, settings: Settings) -> dict | None
     txns = [(f"T{i:04d}{k:02d}", cid, m, a, d.isoformat(), ch) for k, (m, a, d, ch) in enumerate(case.txns + noise)]
     disputes = [(f"D{i:04d}{k:02d}", cid, f"OLD{k}", t, o.isoformat(), out) for k, (t, o, out) in enumerate(case.disputes)]
     return {
-        "case_id": f"V1-{i:04d}", "scenario": case.scenario, "customer_id": cid, "as_of": AS_OF.isoformat(),
+        "case_id": f"{'V1' if case.scenario.split('/')[0] != 'shift' else 'PS'}-{i:04d}", "scenario": case.scenario, "customer_id": cid, "as_of": AS_OF.isoformat(),
         "narrative": text, "expected_type": case.expected_type, "expected_decision": case.expected_decision,
         "expected_refund": case.expected_refund, "expected_clauses": case.expected_clauses,
         "ledger": {"customers": [(cid, f"Customer {i}", "2021-06-01")], "transactions": txns, "disputes": disputes},
@@ -287,11 +336,13 @@ def main() -> None:
     ap.add_argument("--per-scenario", type=int, default=12)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--workers", type=int, default=8)
-    ap.add_argument("--out", type=Path, default=ROOT / "eval" / "golden_v1.jsonl")
+    ap.add_argument("--suite", choices=list(SUITES), default="v1")
+    ap.add_argument("--out", type=Path, default=None, help="default: eval/golden_v1.jsonl or eval/golden_<suite>.jsonl")
     args = ap.parse_args()
+    args.out = args.out or ROOT / "eval" / ("golden_v1.jsonl" if args.suite == "v1" else f"golden_{args.suite}.jsonl")
 
     rng = random.Random(args.seed)
-    plan = [fn(rng) for fn in SCENARIOS for _ in range(args.per_scenario)]
+    plan = [fn(rng) for fn in SUITES[args.suite] for _ in range(args.per_scenario)]
     settings = Settings()
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         rows = list(pool.map(lambda ic: write_case(ic[0], ic[1], args.seed, settings), enumerate(plan, 1)))

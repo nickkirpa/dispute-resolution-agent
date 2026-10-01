@@ -26,7 +26,7 @@ from dispute_agent.brain import RuleBrain  # noqa: E402
 from dispute_agent.config import Settings  # noqa: E402
 from dispute_agent.graph import Deps, build_graph, run_case  # noqa: E402
 from dispute_agent.state import CaseState  # noqa: E402
-from dispute_agent.tools import KnowledgeBase  # noqa: E402
+from dispute_agent.tools import KnowledgeBase, build_kb  # noqa: E402
 from dispute_agent.tools import Ledger  # noqa: E402
 from eval.fixtures import build_fixture_ledger  # noqa: E402
 
@@ -102,13 +102,15 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
 
 def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: Path = ROOT / "eval" / "golden.jsonl",
              workers: int = 1, evidence: str | None = None, no_fill: bool = False, kb_version: str | None = None,
-             effort: str | None = None) -> dict:
+             effort: str | None = None, retrieval: str | None = None) -> dict:
     golden_rows = load_golden(golden_path)
     # labels are only valid for the policy version they were made under; default v1 (seed + golden_v1)
     pinned = kb_version or golden_rows[0].get("policy_version", "v1")
     overrides = {k: v for k, v in {"model": model, "evidence_mode": evidence, "kb_version": pinned}.items() if v}
     if no_fill:
         overrides["coverage_fill"] = False
+    if retrieval:
+        overrides["retrieval_mode"] = retrieval
     if effort:
         from dispute_agent.config import _parse_effort
 
@@ -118,7 +120,7 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
         raise SystemExit("--evidence agent needs an LLM brain (--brain llm)")
     golden = golden_rows
     ledger = build_ledger(golden)
-    kb = KnowledgeBase(settings.kb_dir, settings.kb_version)
+    kb = build_kb(settings)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         rows = list(pool.map(lambda g: run_one(g, brain_kind, settings, ledger, kb), golden))
 
@@ -126,6 +128,7 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
     summary = {
         "brain": (brain_kind if brain_kind == "rules" else f"llm:{settings.model}") + f"+{settings.evidence_mode}"
                  + ("" if settings.coverage_fill else "-nofill")
+                 + ("" if settings.retrieval_mode == "bm25" else f"+{settings.retrieval_mode}")
                  + ("+" + "-".join(f"{k}.{v}" for k, v in sorted(settings.effort_by_step.items())) if settings.effort_by_step else ""),
         "golden": golden_path.name,
         "kb_version": kb.version,
@@ -187,10 +190,11 @@ def main() -> None:
     ap.add_argument("--no-fill", action="store_true", help="ablation: agent mode without code coverage fills")
     ap.add_argument("--kb-version", default=None, help="policy version (default: the golden set's policy_version, else v1)")
     ap.add_argument("--effort", default=None, help='per-step reasoning effort, e.g. "decide=medium,action=medium"')
+    ap.add_argument("--retrieval", choices=["bm25", "dense", "hybrid"], default=None, help="policy search mode")
     args = ap.parse_args()
 
     if args.repeats > 1:
-        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort) for _ in range(args.repeats)]
+        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval) for _ in range(args.repeats)]
         agg = aggregate(reports) | {"brain": reports[0]["summary"]["brain"], "golden": args.golden.name}
         out_dir = ROOT / "eval" / "results"
         out_dir.mkdir(exist_ok=True)
@@ -204,7 +208,7 @@ def main() -> None:
         print(f"\nReport: {out.relative_to(ROOT)}")
         return
 
-    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort)
+    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval)
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
     out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{re.sub(r'[^A-Za-z0-9.-]+', '_', report['summary']['brain'])}.json"
