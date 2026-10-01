@@ -89,6 +89,7 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
         "fallback_error": out.get("fallback_error"),
         "self_check_errors": out.get("self_check_errors", []),
         "draft_attempts": out.get("draft_attempts", 0),
+        "dropped_citations": out.get("dropped_citations", []),
         "response_draft": out.get("response_draft", ""),
         "steps": out.get("steps", 0),
         "llm_calls": usage.llm_calls,
@@ -138,6 +139,7 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
         "escalation_rate": sum(r["decision"] == "escalate" for r in rows) / n,
         "self_check_failure_rate": sum(bool(r["self_check_errors"]) for r in rows) / n,  # still failing after retries
         "redraft_rate": sum(r["draft_attempts"] > 1 for r in rows) / n,  # first draft failed the self-check
+        "dropped_citation_rate": sum(bool(r["dropped_citations"]) for r in rows) / n,  # model cited an inapplicable clause
         "crash_rate": sum(bool(r["error"]) for r in rows) / n,
         "avg_steps": sum(r["steps"] for r in rows) / n,
         "evidence_mode": settings.evidence_mode,

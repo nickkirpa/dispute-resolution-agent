@@ -148,3 +148,76 @@ def test_failed_self_check_triggers_targeted_redraft():
                    narrative="Netflux charged me 15.99 EUR twice, once in July and again in August."))
     assert out["decision"] == Decision.REJECT and out["draft_attempts"] == 2 and out["self_check_errors"] == []
     assert brain.seen_errors[0] == [] and any("must not promise" in e for e in brain.seen_errors[1])
+
+
+# ---- regressions for bugs found in manual testing (2026-10-02, case-0aec9c90)
+
+def test_inapplicable_citations_are_dropped_and_recorded():
+    """The LLM cited POL-UNA-02 (repeat claims) and POL-GEN-02 (late filing) for a first, on-time claim."""
+    from dispute_agent.brain import DecisionProposal
+
+    class OverCiting(RuleBrain):
+        def decide(self, state):
+            return DecisionProposal(decision=Decision.REFUND, confidence=0.9, rationale="unauthorized",
+                                    cited_clauses=["POL-UNA-01", "POL-UNA-02", "POL-GEN-02", "POL-GEN-01", "POL-FEE-01"])
+
+    led = build_fixture_ledger()
+    deps = Deps(brain=OverCiting(led.merchants()), ledger=led, kb=KnowledgeBase(Settings().kb_dir, "v2"))
+    out = run_case(build_graph(deps), CaseState(case_id="cite", customer_id="C005", as_of="2026-09-30",
+                   narrative="There is a payment of 120.00 EUR to CryptoMart on 2026-09-20 that I don't recognise."))
+    assert out["cited_clauses"] == ["POL-UNA-01"]
+    assert set(out["dropped_citations"]) == {"POL-UNA-02", "POL-GEN-02", "POL-GEN-01", "POL-FEE-01"}
+
+
+def test_repeat_claim_clause_kept_when_history_supports_it():
+    from dispute_agent.brain import DecisionProposal
+
+    class Cites(RuleBrain):
+        def decide(self, state):
+            return DecisionProposal(decision=Decision.ESCALATE, confidence=0.9, rationale="repeat", cited_clauses=["POL-UNA-02"])
+
+    led = build_fixture_ledger()
+    deps = Deps(brain=Cites(led.merchants()), ledger=led, kb=KnowledgeBase(Settings().kb_dir, "v1"))
+    out = run_case(build_graph(deps), CaseState(case_id="rep", customer_id="C007", as_of="2026-09-30",
+                   narrative="A charge of 34.50 EUR from PizzaNow on 2026-09-25 was not authorised by me."))
+    assert "POL-UNA-02" in out["cited_clauses"] and out["dropped_citations"] == []
+
+
+def test_usage_accumulates_across_restart(tmp_path):
+    """Each process has its own brain counter; the case total must be the sum over all processes."""
+    import sqlite3
+
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    from dispute_agent.state import CHECKPOINT_TYPES, Usage
+
+    class Metered(RuleBrain):  # pretends every brain call is one LLM call costing $0.001
+        def _tick(self):
+            self.usage = self.usage.add(Usage(llm_calls=1, cost_usd=0.001))
+
+        def extract_claim(self, *a):
+            self._tick(); return super().extract_claim(*a)
+
+        def classify(self, *a):
+            self._tick(); return super().classify(*a)
+
+        def decide(self, *a):
+            self._tick(); return super().decide(*a)
+
+        def draft_response(self, *a):
+            self._tick(); return super().draft_response(*a)
+
+    db = tmp_path / "c.sqlite"
+
+    def app():
+        led = build_fixture_ledger()
+        deps = Deps(brain=Metered(led.merchants()), ledger=led, kb=KnowledgeBase(Settings().kb_dir, "v1"), human_in_loop=True)
+        conn = sqlite3.connect(db, check_same_thread=False)
+        return build_graph(deps, checkpointer=SqliteSaver(conn, serde=JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)))
+
+    config = {"configurable": {"thread_id": "u"}}
+    app().invoke(CaseState(case_id="u", customer_id="C006", as_of="2026-09-30",
+                           narrative="I don't recognise a 899.00 EUR charge from LuxWatch on 2026-09-15."), config=config)
+    final = app().invoke(Command(resume={"decision": "refund", "refund_amount": 899.0}), config=config)  # new process
+    assert final["usage"].llm_calls == 4  # extract + classify + decide (process 1) + draft (process 2)

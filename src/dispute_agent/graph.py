@@ -79,12 +79,37 @@ def reply_consistency_errors(decision: Decision, draft: str, refund_amount: floa
     return errors
 
 
+def clause_applies(clause_id: str, state: CaseState, decision: Decision, needs_human: bool, kb: KnowledgeBase) -> bool:
+    """Can this clause justify this decision, given the evidence? Conditions mirror policy v1/v2 wording; clauses
+    without a condition apply when they belong to the dispute type (or to all disputes)."""
+    clause = kb.get(clause_id)
+    if clause is None or not ({state.dispute_type.value, "all"} & set(clause.applies_to)):
+        return False  # unknown clause, or a clause for another dispute type / another topic
+    window = state.evidence_of("filing_window")
+    days = window[0].data["days_since_transaction"] if window else None
+    hist = (state.evidence_of("customer_history") or [None])[0]
+    conditions = {
+        "POL-GEN-01": False,  # scope statement: never decides a case
+        "POL-GEN-02": days is not None and days > kb.param("filing_window_days"),
+        "POL-GEN-03": not state.evidence_of("matching_transaction"),
+        "POL-GEN-04": needs_human or decision == Decision.ESCALATE,
+        "POL-DUP-01": bool(state.evidence_of("duplicate_transactions")),
+        "POL-DUP-02": bool(state.evidence_of("no_duplicates")),
+        "POL-NR-01": bool(state.claim and state.claim.contacted_merchant),
+        "POL-NR-02": "merchant_contact" in state.missing_evidence,
+        "POL-UNA-02": bool(hist and hist.data.get("unauthorized_disputes_last_12m", 0) >= 2),
+        "POL-REF-01": not state.evidence_of("merchant_refunds"),
+        "POL-REF-02": bool(state.evidence_of("merchant_refunds")),
+    }
+    return conditions.get(clause_id, True)
+
+
 def _step(name: str, state: CaseState, **update) -> dict:
     return {"steps": state.steps + 1, "trace": [name], **update}
 
 
 def _escalate(name: str, state: CaseState, reason: str, deps: Deps) -> dict:
-    return _step(name, state, needs_human=True, human_reason=reason, usage=deps.brain.usage.model_copy())
+    return _step(name, state, needs_human=True, human_reason=reason)
 
 
 def build_graph(deps: Deps, checkpointer=None):
@@ -97,14 +122,14 @@ def build_graph(deps: Deps, checkpointer=None):
         except LLMRefusal as e:
             return _escalate("intake", state, f"model refusal: {e}", deps)
         claim = claim.model_copy(update={"transaction_date": normalize_claim_date(claim.transaction_date, state.as_of)})
-        return _step("intake", state, claim=claim, usage=deps.brain.usage.model_copy())
+        return _step("intake", state, claim=claim)
 
     def classify(state: CaseState) -> dict:
         try:
             c = deps.brain.classify(state.narrative, state.claim)
         except LLMRefusal as e:
             return _escalate("classify", state, f"model refusal: {e}", deps)
-        return _step("classify", state, dispute_type=c.dispute_type, type_confidence=c.confidence, usage=deps.brain.usage.model_copy())
+        return _step("classify", state, dispute_type=c.dispute_type, type_confidence=c.confidence)
 
     def gather_evidence(state: CaseState) -> dict:
         """Plan mode: scripted tool calls. Agent mode: LLM-chosen tool calls under a budget, falling back to the plan
@@ -125,8 +150,7 @@ def build_graph(deps: Deps, checkpointer=None):
         evidence, clauses = finalize(box)
         return _step("gather_evidence", state, evidence=evidence, clauses=clauses, kb_version=deps.kb.version,
                      policy_params=dict(deps.kb.params),
-                     evidence_mode=mode, tool_calls=box.calls, coverage_fills=fills, fallback_error=error,
-                     usage=deps.brain.usage.model_copy())
+                     evidence_mode=mode, tool_calls=box.calls, coverage_fills=fills, fallback_error=error)
 
     def policy_check(state: CaseState) -> dict:
         """Which evidence does policy require that we don't have? Deterministic."""
@@ -183,9 +207,15 @@ def build_graph(deps: Deps, checkpointer=None):
         needs_human = decision == Decision.ESCALATE or any(not r.startswith("guard: required evidence") for r in reasons)
         reason = "; ".join(reasons) or (p.rationale if decision == Decision.ESCALATE else "")
 
+        # citation relevance: keep only clauses whose conditions the evidence meets (dropped ones are recorded)
+        cited = [c for c in p.cited_clauses if clause_applies(c, state, decision, needs_human, deps.kb)]
+        dropped = [c for c in p.cited_clauses if c not in cited]
+        if not cited:  # nothing applicable: keep the model's list, self_check / the eval will surface it
+            cited, dropped = p.cited_clauses, []
+
         return _step("decide", state, decision=decision, decision_confidence=p.confidence, refund_amount=refund,
-                     rationale=p.rationale, cited_clauses=p.cited_clauses, needs_human=needs_human,
-                     human_reason=reason, usage=deps.brain.usage.model_copy())
+                     rationale=p.rationale, cited_clauses=cited, dropped_citations=dropped, needs_human=needs_human,
+                     human_reason=reason)
 
     def human_review(state: CaseState) -> dict:
         if deps.human_in_loop:
@@ -211,8 +241,7 @@ def build_graph(deps: Deps, checkpointer=None):
             text = deps.brain.draft_response(state)
         except LLMRefusal as e:
             return _escalate("draft_response", state, f"model refusal: {e}", deps)
-        return _step("draft_response", state, response_draft=text, draft_attempts=state.draft_attempts + 1,
-                     usage=deps.brain.usage.model_copy())
+        return _step("draft_response", state, response_draft=text, draft_attempts=state.draft_attempts + 1)
 
     def self_check(state: CaseState) -> dict:
         """Deterministic verification of the draft against the decision and retrieved policy."""
@@ -249,11 +278,24 @@ def build_graph(deps: Deps, checkpointer=None):
             return "draft_response"
         return END  # errors stay on the state and are reported by the eval
 
+    def metered(fn):
+        """Add only the LLM usage incurred during this step to the case total. The brain's counter belongs to the
+        process, the case total belongs to the checkpointed state, so totals stay correct across resumes."""
+        def step(state: CaseState) -> dict:
+            before = deps.brain.usage.model_copy()
+            update = fn(state)
+            spent = deps.brain.usage.minus(before)
+            if spent.llm_calls:
+                update["usage"] = state.usage.add(spent)
+            return update
+        step.__name__ = fn.__name__
+        return step
+
     g = StateGraph(CaseState)
     for name, fn in [("intake", intake), ("classify", classify), ("gather_evidence", gather_evidence),
                      ("policy_check", policy_check), ("decide", decide), ("human_review", human_review),
                      ("draft_response", draft_response), ("self_check", self_check)]:
-        g.add_node(name, fn)
+        g.add_node(name, metered(fn))
     g.add_edge(START, "intake")
     g.add_conditional_edges("intake", after_intake, ["classify", "human_review"])
     g.add_conditional_edges("classify", after_classify, ["gather_evidence", "human_review"])

@@ -60,6 +60,14 @@ class Usage(BaseModel):
     output_tokens: int = 0
     cost_usd: float = 0.0
 
+    def minus(self, other: "Usage") -> "Usage":
+        return Usage(
+            llm_calls=self.llm_calls - other.llm_calls,
+            input_tokens=self.input_tokens - other.input_tokens,
+            output_tokens=self.output_tokens - other.output_tokens,
+            cost_usd=self.cost_usd - other.cost_usd,
+        )
+
     def add(self, other: "Usage") -> "Usage":
         return Usage(
             llm_calls=self.llm_calls + other.llm_calls,
@@ -75,6 +83,9 @@ class CaseState(BaseModel):
     customer_id: str
     narrative: str
     as_of: date = Field(default_factory=date.today, description="Date the case is processed; fixed in evals")
+    # how this case is processed (brain, model, evidence mode, policy version...). Stored so a resumed case continues
+    # with the same brain and the same policy version it started with, whatever the current defaults are.
+    run_config: dict = Field(default_factory=dict)
 
     # understanding
     claim: Claim | None = None
@@ -98,6 +109,7 @@ class CaseState(BaseModel):
     refund_amount: float = 0.0
     rationale: str = ""
     cited_clauses: list[str] = Field(default_factory=list)
+    dropped_citations: list[str] = Field(default_factory=list)  # cited by the model but not applicable to the evidence
     response_draft: str = ""
 
     # control

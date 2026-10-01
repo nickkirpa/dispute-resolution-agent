@@ -32,18 +32,28 @@ from .tools import KnowledgeBase
 DEFAULT_DB = ROOT / "data" / "cases.sqlite"
 
 
-def _app(args, settings: Settings, conn: sqlite3.Connection):
+def run_config(args, settings: Settings) -> dict:
+    """Everything needed to rebuild the same agent later. kb_version is resolved ("latest" -> "v2") on purpose."""
+    return {"brain": args.brain, "provider": settings.provider, "model": settings.model,
+            "evidence_mode": settings.evidence_mode, "effort_by_step": settings.effort_by_step,
+            "kb_version": KnowledgeBase(settings.kb_dir, settings.kb_version).version}
+
+
+def _app(config: dict, conn: sqlite3.Connection):
     sys.path.insert(0, str(ROOT))
     from eval.fixtures import build_fixture_ledger  # demo data; swap for data/ledger.duckdb later
 
+    settings = Settings(provider=config["provider"], model=config["model"], evidence_mode=config["evidence_mode"],
+                        effort_by_step=config.get("effort_by_step", {}), kb_version=config["kb_version"])
     ledger = build_fixture_ledger()
-    if args.brain == "rules":
+    if config["brain"] == "rules":
         brain = RuleBrain(known_merchants=ledger.merchants())
     else:
         from .llm_brain import make_llm_brain
 
         brain = make_llm_brain(settings)
-    deps = Deps(brain=brain, ledger=ledger, kb=KnowledgeBase(settings.kb_dir), settings=settings, human_in_loop=True)
+    kb = KnowledgeBase(settings.kb_dir, settings.kb_version)
+    deps = Deps(brain=brain, ledger=ledger, kb=kb, settings=settings, human_in_loop=True)
     serde = JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)
     return build_graph(deps, checkpointer=SqliteSaver(conn, serde=serde))
 
@@ -114,19 +124,26 @@ def main() -> None:
     settings = Settings(**({"evidence_mode": args.evidence} if args.evidence else {}))
     args.db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(args.db, check_same_thread=False)
-    app = _app(args, settings, conn)
+    cli_config = run_config(args, settings)
+    app = _app(cli_config, conn)  # for run / show / pending; resume rebuilds from the case's stored config
 
     if args.cmd == "run":
         case_id = f"case-{uuid.uuid4().hex[:8]}"
         config = {"configurable": {"thread_id": case_id}}
         print(f"case id: {case_id}  (checkpoints: {args.db})")
-        result = app.invoke(CaseState(case_id=case_id, customer_id=args.customer, narrative=args.narrative, as_of=args.as_of),
-                            config=config)
+        print(f"config:  {cli_config}")
+        result = app.invoke(CaseState(case_id=case_id, customer_id=args.customer, narrative=args.narrative, as_of=args.as_of,
+                                      run_config=cli_config), config=config)
         _drive(app, config, result, args.interactive)
     elif args.cmd == "resume":
         config = {"configurable": {"thread_id": args.case_id}}
-        if not app.get_state(config).next:
+        snap = app.get_state(config)
+        if not snap.next:
             sys.exit(f"{args.case_id} is not waiting for review (unknown id or already finished)")
+        stored = snap.values.get("run_config") or cli_config  # cases from before run_config existed: use CLI flags
+        if stored != cli_config:
+            print(f"resuming with the case's original config (ignoring current flags/defaults): {stored}")
+        app = _app(stored, conn)
         verdict = {"decision": args.decision, "note": args.note}
         if args.refund_amount is not None:
             verdict["refund_amount"] = args.refund_amount

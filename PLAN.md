@@ -90,11 +90,14 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
       The first version had 5 false positives on real LLM replies; fixed, added as tests, and all 731 saved non-refund replies
       re-scored clean
 
-### Bugs found in manual testing (2026-10-02, case-0aec9c90): not fixed yet, schedule with the user
-- [ ] `resume` uses the default brain (rules) instead of the brain the case started with; the case should store its settings
-- [ ] Usage/cost is overwritten instead of accumulated across processes (the resumed case showed "0 LLM calls, $0")
-- [ ] Citation relevance: the LLM cited POL-UNA-02 (repeat claims) although history showed none; self-check only checks
-      that cited clauses *exist*, not that they *apply*
+### Bugs found in manual testing (2026-10-02, case-0aec9c90): fixed 2026-10-02
+- [x] `resume` used the default brain instead of the case's own. Fix: each case stores `run_config` (brain, model,
+      evidence mode, **resolved policy version**) and resume rebuilds from it. A case also can't switch policy version mid-case
+- [x] Usage was overwritten across processes. Fix: every graph step is metered and adds only its own usage to the case total
+      (verified: the resumed LLM case reports 10 calls / $0.0077 instead of 0 / $0)
+- [x] Citation relevance. Fix: `clause_applies()` conditions per clause; inapplicable citations are dropped and recorded
+      in `dropped_citations`. Measured on golden_v1 (plan, gpt-5.4-mini): the model over-cites in 76% of cases (mostly
+      general clauses); 0 of 278 dropped citations were expected clauses; citation recall 99.6% → 100%
 
 ### Days 6–7: retrieval and a living knowledge base
 - [ ] Hybrid retrieval: BM25 plus embeddings plus a reranker. Build a labelled query→clause set and report recall@k and MRR
