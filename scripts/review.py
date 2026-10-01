@@ -32,6 +32,20 @@ UNAUTH = r"(recogni[sz]e|authori[sz]|did ?n[o']t make|didn'?t make|never made|fr
 AMOUNT = r"\d+[.,]\d{2}"
 
 
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+NOISE_MERCHANTS = {"GroceryCo", "FuelStop", "CafeLumen", "PharmaPlus"}
+
+
+def dates_in_text(t: str) -> set[tuple[int, int]]:
+    """(month, day) pairs mentioned as 2026-07-06, '6 July', 'July 6th', '6th of July'."""
+    t = t.lower()
+    found = {(int(m), int(d)) for _, m, d in re.findall(r"(\d{4})-(\d{2})-(\d{2})", t)}
+    for i, name in enumerate(MONTHS, 1):
+        for pat in (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?(?: of)? {name}\b", rf"\b{name} (\d{{1,2}})(?:st|nd|rd|th)?\b"):
+            found |= {(i, int(d)) for d in re.findall(pat, t)}
+    return found
+
+
 def golden_flags(r: dict) -> list[str]:
     """Cheap faithfulness heuristics per scenario. A flag means 'look carefully', not 'wrong'."""
     t, sc = r["narrative"].lower(), r["scenario"]
@@ -48,6 +62,11 @@ def golden_flags(r: dict) -> list[str]:
         flags.append("does not mention a refund")
     if sc == "wrong_amount/request_info_no_expected" and len(set(re.findall(AMOUNT, t))) > 1:
         flags.append("states a second amount (could be read as the expected price)")
+    case_dates = {(int(x[4][5:7]), int(x[4][8:10])) for x in r["ledger"]["transactions"]
+                  if x[2] not in NOISE_MERCHANTS and x[3] > 0}
+    mentioned = dates_in_text(t)
+    if mentioned and not mentioned & case_dates:
+        flags.append(f"date in text {sorted(mentioned)} does not match ledger {sorted(case_dates)} (month, day)")
     if sc == "wrong_amount/refund" and not re.search(r"instead of|agreed|should (have )?been|quoted|price was", t):
         flags.append("expected price phrasing unclear")
     return flags
@@ -84,14 +103,15 @@ def show(kind: str, r: dict, flags: list[str], pos: str) -> None:
     print("\n" + "=" * 78)
     if kind == "golden":
         led = r["ledger"]["transactions"]
-        case_txns = [t for t in led if t[2] not in {"GroceryCo", "FuelStop", "CafeLumen", "PharmaPlus"}]
+        case_txns = [t for t in led if t[2] not in NOISE_MERCHANTS]
         refund = f" {r['expected_refund']:.2f} EUR" if r["expected_refund"] else ""
         print(f"{pos}  {r['case_id']}  [{r['scenario']}]  -> expected {r['expected_decision'].upper()}{refund}")
         print(f"ledger (case txns): {[(t[2], t[3], t[4]) for t in case_txns]}"
               + (f"   prior disputes: {len(r['ledger']['disputes'])}" if r["ledger"]["disputes"] else ""))
-        print(f"date rule: {r['generator']['date_rule']}")
+        print(f"how the date was written (generator instruction, NOT a requirement): {r['generator']['date_rule']}")
         print(f"\n  \"{r['narrative']}\"\n")
-        print("Check: does the text state the facts this scenario needs, and nothing that changes the outcome?")
+        print("Check: facts the scenario needs are stated; nothing contradicts the ledger (merchant, amount, date if given).\n"
+              "       Any date style is fine (2026-07-06, '6 July', or no date). Reject only a WRONG date.")
     else:
         print(f"{pos}  [{r['angle']} | {r['style']}]")
         print(f"\n  \"{r['text']}\"\n")
