@@ -63,7 +63,11 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
 - [x] Download Banking77 and map intents → `DisputeType` (train 10,003 / test 3,080; ~84% `other`, which is realistic for a router)
 - [x] 300 synthetic `not_received` router messages (`data/synthetic/not_received.jsonl`, $0.04). **Review pending (me)**.
       Report router metrics on this class separately (LLM-written, so it's an easier distribution than human text)
-- [ ] Carve a validation split from Banking77 train (stratified) when training the router
+- [x] Router splits (`scripts/make_router_splits.py` → `data/router/`): Banking77 train → 90/10 train/val **stratified on the 77
+      original intents**; official Banking77 test kept untouched; synthetic not_received 70/15/15; 7 exact-duplicate texts that
+      leaked across Banking77's own splits removed from train/val. Result: train 9,204 / val 1,047 / test 3,125
+- [x] Review tool `scripts/review.py` (auto-flags + per-scenario sample, verdicts saved into the files; rejected items are
+      excluded from evals and router splits). **Review itself pending (me)**
 - [x] Golden cases carry their own ledger rows (`ledger` field); the eval builds one DuckDB from them and runs in parallel
 - [x] `golden_v1.jsonl`: **204 cases, 17 scenarios × 12, labels correct by construction** (`scripts/generate_golden.py`).
       The LLM writes narratives only, and automatic checks require the merchant and amounts. **Review pending (me)**: skim

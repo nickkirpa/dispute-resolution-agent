@@ -32,7 +32,9 @@ from eval.fixtures import build_fixture_ledger  # noqa: E402
 
 
 def load_golden(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    """Cases a human rejected in scripts/review.py are excluded."""
+    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    return [r for r in rows if r.get("review_status") != "rejected"]
 
 
 def make_brain(kind: str, settings: Settings, ledger):

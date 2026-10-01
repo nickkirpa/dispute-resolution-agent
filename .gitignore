@@ -7,3 +7,4 @@ data/raw/
 eval/results/
 .pytest_cache/
 data/router_*.jsonl
+data/router/
