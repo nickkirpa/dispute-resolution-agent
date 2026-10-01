@@ -88,6 +88,8 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
         "coverage_fills": out.get("coverage_fills", []),
         "fallback_error": out.get("fallback_error"),
         "self_check_errors": out.get("self_check_errors", []),
+        "draft_attempts": out.get("draft_attempts", 0),
+        "response_draft": out.get("response_draft", ""),
         "steps": out.get("steps", 0),
         "llm_calls": usage.llm_calls,
         "cost_usd": usage.cost_usd,
@@ -98,13 +100,18 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
 
 
 def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: Path = ROOT / "eval" / "golden.jsonl",
-             workers: int = 1, evidence: str | None = None, no_fill: bool = False, kb_version: str | None = None) -> dict:
+             workers: int = 1, evidence: str | None = None, no_fill: bool = False, kb_version: str | None = None,
+             effort: str | None = None) -> dict:
     golden_rows = load_golden(golden_path)
     # labels are only valid for the policy version they were made under; default v1 (seed + golden_v1)
     pinned = kb_version or golden_rows[0].get("policy_version", "v1")
     overrides = {k: v for k, v in {"model": model, "evidence_mode": evidence, "kb_version": pinned}.items() if v}
     if no_fill:
         overrides["coverage_fill"] = False
+    if effort:
+        from dispute_agent.config import _parse_effort
+
+        overrides["effort_by_step"] = _parse_effort(effort)
     settings = Settings(**overrides)
     if settings.evidence_mode == "agent" and brain_kind == "rules":
         raise SystemExit("--evidence agent needs an LLM brain (--brain llm)")
@@ -117,7 +124,8 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
     n = len(rows)
     summary = {
         "brain": (brain_kind if brain_kind == "rules" else f"llm:{settings.model}") + f"+{settings.evidence_mode}"
-                 + ("" if settings.coverage_fill else "-nofill"),
+                 + ("" if settings.coverage_fill else "-nofill")
+                 + ("+" + "-".join(f"{k}.{v}" for k, v in sorted(settings.effort_by_step.items())) if settings.effort_by_step else ""),
         "golden": golden_path.name,
         "kb_version": kb.version,
         "n_cases": n,
@@ -128,7 +136,8 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
         "unsafe_refund_rate": sum(r["unsafe_refund"] for r in rows) / n,  # paid out when policy says no: must be 0
         "guard_intervention_rate": sum(bool(r["guard_reason"]) for r in rows) / n,
         "escalation_rate": sum(r["decision"] == "escalate" for r in rows) / n,
-        "self_check_failure_rate": sum(bool(r["self_check_errors"]) for r in rows) / n,
+        "self_check_failure_rate": sum(bool(r["self_check_errors"]) for r in rows) / n,  # still failing after retries
+        "redraft_rate": sum(r["draft_attempts"] > 1 for r in rows) / n,  # first draft failed the self-check
         "crash_rate": sum(bool(r["error"]) for r in rows) / n,
         "avg_steps": sum(r["steps"] for r in rows) / n,
         "evidence_mode": settings.evidence_mode,
@@ -175,10 +184,11 @@ def main() -> None:
     ap.add_argument("--repeats", type=int, default=1, help="run the whole set N times and report mean/std + flaky cases")
     ap.add_argument("--no-fill", action="store_true", help="ablation: agent mode without code coverage fills")
     ap.add_argument("--kb-version", default=None, help="policy version (default: the golden set's policy_version, else v1)")
+    ap.add_argument("--effort", default=None, help='per-step reasoning effort, e.g. "decide=medium,action=medium"')
     args = ap.parse_args()
 
     if args.repeats > 1:
-        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version) for _ in range(args.repeats)]
+        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort) for _ in range(args.repeats)]
         agg = aggregate(reports) | {"brain": reports[0]["summary"]["brain"], "golden": args.golden.name}
         out_dir = ROOT / "eval" / "results"
         out_dir.mkdir(exist_ok=True)
@@ -192,7 +202,7 @@ def main() -> None:
         print(f"\nReport: {out.relative_to(ROOT)}")
         return
 
-    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version)
+    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort)
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
     out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{re.sub(r'[^A-Za-z0-9.-]+', '_', report['summary']['brain'])}.json"

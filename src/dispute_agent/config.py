@@ -17,11 +17,18 @@ MODEL_PRICES: dict[str, tuple[float, float]] = {
 }
 
 
+def _parse_effort(spec: str) -> dict[str, str]:
+    """'decide=medium, action=low' -> {'decide': 'medium', 'action': 'low'}"""
+    return {k.strip(): v.strip() for k, _, v in (item.partition("=") for item in spec.split(",")) if k.strip() and v.strip()}
+
+
 class Settings(BaseModel):
     # env is read when Settings() is created (not at import), so load_dotenv() can run first
     provider: str = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_PROVIDER", "anthropic"))  # anthropic | openai
     model: str = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_MODEL", "claude-opus-5-5"))
     reasoning_effort: str | None = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_REASONING_EFFORT"))  # openai reasoning models only
+    # per-step override, e.g. "decide=medium,action=medium" (steps: extract, classify, decide, draft, action)
+    effort_by_step: dict[str, str] = Field(default_factory=lambda: _parse_effort(os.getenv("DISPUTE_AGENT_EFFORT", "")))
     # pricing key when `model` is a proxy alias (e.g. LiteLLM); defaults to `model`
     price_model: str | None = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_PRICE_MODEL"))
     kb_dir: Path = ROOT / "kb" / "policies"

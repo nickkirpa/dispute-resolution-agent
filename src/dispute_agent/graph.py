@@ -54,6 +54,31 @@ def normalize_claim_date(iso: str | None, as_of: date) -> str | None:
     return d.isoformat()
 
 
+# Reply/decision consistency. Deterministic phrase checks: cheap, explainable, and they catch the costly mistakes
+# (telling a rejected customer they were refunded). Tone and fluency are out of scope here.
+# Positive phrasings only: "we can't provide a refund or provisional credit" must not count as a promise.
+PROMISES_MONEY = re.compile(r"(we('ve| have) (issued|refunded|credited|applied)|(a|your) provisional credit (of|has been|will be)|"
+                            r"has been (refunded|credited)|you will (receive|get) (a |your )?(refund|credit|money back)|"
+                            r"we('ll| will) (refund|credit))", re.I)
+ASKS_FOR_INFO = re.compile(r"(\?|please (provide|send|share|confirm|tell|let us know|reply|contact|reach|get back|upload|include)|"
+                           r"could you|can you|we need|need (a bit )?more information|send us|reach (back )?out|get back to us)", re.I)
+MENTIONS_REVIEW = re.compile(r"(specialist|officer|review|team|colleague|escalat|look into)", re.I)
+
+
+def reply_consistency_errors(decision: Decision, draft: str, refund_amount: float) -> list[str]:
+    errors = []
+    if decision == Decision.REFUND:
+        if f"{refund_amount:.2f}" not in draft:
+            errors.append(f"refund reply must state the computed amount {refund_amount:.2f}")
+    elif PROMISES_MONEY.search(draft):
+        errors.append(f"{decision.value} reply must not promise a refund or credit")
+    if decision == Decision.REQUEST_INFO and not ASKS_FOR_INFO.search(draft):
+        errors.append("request_info reply must ask the customer for the missing information")
+    if decision == Decision.ESCALATE and not MENTIONS_REVIEW.search(draft):
+        errors.append("escalate reply must tell the customer the case is being reviewed")
+    return errors
+
+
 def _step(name: str, state: CaseState, **update) -> dict:
     return {"steps": state.steps + 1, "trace": [name], **update}
 
@@ -198,8 +223,7 @@ def build_graph(deps: Deps, checkpointer=None):
             errors.append(f"cited clauses not in retrieved policy: {unknown}")
         if not state.cited_clauses:
             errors.append("no policy clause cited")
-        if state.decision == Decision.REFUND and f"{state.refund_amount:.2f}" not in state.response_draft:
-            errors.append("draft does not state the computed refund amount")
+        errors += reply_consistency_errors(state.decision, state.response_draft, state.refund_amount)
         mentioned = set(re.findall(r"POL-[A-Z]+-\d+", state.response_draft))
         if mentioned - retrieved:
             errors.append(f"draft mentions unknown clauses: {sorted(mentioned - retrieved)}")

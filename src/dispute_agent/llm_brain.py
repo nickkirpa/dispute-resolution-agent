@@ -67,7 +67,7 @@ DRAFT = (
     "Mention the refund amount exactly as given if the decision is refund, list what is needed if request_info, "
     "and end with '(Policy reference: <clause ids>)'. Do not promise anything the decision does not say.\n\n"
     "Decision: {decision}\nRefund amount (EUR): {amount:.2f}\nMissing evidence: {missing}\nRationale: {rationale}\n"
-    "Cited clauses: {cites}\n\nComplaint:\n{narrative}"
+    "Cited clauses: {cites}\n{fix}\nComplaint:\n{narrative}"
 )
 
 
@@ -77,24 +77,24 @@ class PromptBrain:
     name: str
     usage: Usage
 
-    def _parse(self, prompt: str, schema: type[BaseModel]) -> BaseModel:  # pragma: no cover - abstract
+    def _parse(self, prompt: str, schema: type[BaseModel], step: str = "generate") -> BaseModel:  # pragma: no cover - abstract
         raise NotImplementedError
 
     def next_action(self, prompt: str):
         """Agent mode: choose the next evidence-gathering tool call (see evidence.py)."""
         from .evidence import AgentAction
 
-        return self._parse(prompt, AgentAction)
+        return self._parse(prompt, AgentAction, "action")
 
     def complete(self, prompt: str, schema: type[BaseModel]) -> BaseModel:
         """Generic typed call (used by data-generation scripts)."""
         return self._parse(prompt, schema)
 
     def extract_claim(self, narrative: str, as_of: date | None = None) -> Claim:
-        return self._parse(EXTRACT.format(narrative=narrative, today=(as_of or date.today()).isoformat()), Claim)
+        return self._parse(EXTRACT.format(narrative=narrative, today=(as_of or date.today()).isoformat()), Claim, "extract")
 
     def classify(self, narrative: str, claim: Claim) -> Classification:
-        return self._parse(CLASSIFY.format(narrative=narrative, claim=claim.model_dump_json()), Classification)
+        return self._parse(CLASSIFY.format(narrative=narrative, claim=claim.model_dump_json()), Classification, "classify")
 
     def decide(self, state: CaseState) -> DecisionProposal:
         prompt = DECIDE.format(
@@ -106,7 +106,7 @@ class PromptBrain:
             clauses="\n\n".join(f"{c.clause_id}: {c.title}\n{c.text}" for c in state.clauses),
             narrative=state.narrative,
         )
-        return self._parse(prompt, DecisionProposal)
+        return self._parse(prompt, DecisionProposal, "decide")
 
     def draft_response(self, state: CaseState) -> str:
         prompt = DRAFT.format(
@@ -115,9 +115,11 @@ class PromptBrain:
             missing=state.missing_evidence or "none",
             rationale=state.rationale,
             cites=", ".join(state.cited_clauses),
+            fix=("\nYour previous draft failed these checks; fix them:\n- " + "\n- ".join(state.self_check_errors) + "\n")
+            if state.self_check_errors else "",
             narrative=state.narrative,
         )
-        return self._parse(prompt, Draft).text
+        return self._parse(prompt, Draft, "draft").text
 
 
 class LLMBrain(PromptBrain):
@@ -132,7 +134,8 @@ class LLMBrain(PromptBrain):
         self.max_tokens = max_tokens
         self.usage = Usage()
 
-    def _parse(self, prompt: str, schema: type[BaseModel]) -> BaseModel:
+    def _parse(self, prompt: str, schema: type[BaseModel], step: str = "generate") -> BaseModel:
+        # per-step effort is wired for OpenAIBrain only; Claude's output_config.effort is untested in this setup
         response = self.client.messages.parse(
             model=self.model,
             max_tokens=self.max_tokens,
@@ -167,7 +170,7 @@ class OpenAIBrain(PromptBrain):
     """
 
     def __init__(self, model: str = "openai/gpt-5.4-mini", client=None, max_completion_tokens: int = 8000,
-                 reasoning_effort: str | None = None):
+                 reasoning_effort: str | None = None, effort_by_step: dict[str, str] | None = None):
         import openai
 
         self.name = f"llm:{model}"
@@ -175,18 +178,20 @@ class OpenAIBrain(PromptBrain):
         self.client = client or openai.OpenAI()
         self.max_completion_tokens = max_completion_tokens
         self.reasoning_effort = reasoning_effort
+        self.effort_by_step = effort_by_step or {}
         self.usage = Usage()
         self.cost_source = "unknown"
 
-    def _parse(self, prompt: str, schema: type[BaseModel]) -> BaseModel:
+    def _parse(self, prompt: str, schema: type[BaseModel], step: str = "generate") -> BaseModel:
         kwargs = dict(
             model=self.model,
             messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
             response_format=schema,
             max_completion_tokens=self.max_completion_tokens,
         )
-        if self.reasoning_effort:
-            kwargs["reasoning_effort"] = self.reasoning_effort
+        effort = self.effort_by_step.get(step, self.reasoning_effort)
+        if effort:
+            kwargs["reasoning_effort"] = effort
         raw = self.client.chat.completions.with_raw_response.parse(**kwargs)
         completion = raw.parse()
         self._track(completion.usage, raw.headers.get("x-litellm-response-cost"))
@@ -213,5 +218,5 @@ class OpenAIBrain(PromptBrain):
 def make_llm_brain(settings) -> PromptBrain:
     """Provider switch used by the CLI, the eval harness and scripts/check_llm.py."""
     if settings.provider == "openai":
-        return OpenAIBrain(model=settings.model, reasoning_effort=settings.reasoning_effort)
+        return OpenAIBrain(model=settings.model, reasoning_effort=settings.reasoning_effort, effort_by_step=settings.effort_by_step)
     return LLMBrain(model=settings.model, price_model=settings.price_model)

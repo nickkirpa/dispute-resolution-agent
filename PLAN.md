@@ -81,8 +81,20 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
 - [x] SQLite checkpointer: `dispute-agent run / pending / show / resume` across processes; checkpoint types allow-listed;
       restart test
 - [x] `--repeats N` in the eval: mean ± std, flaky cases, always-wrong cases
-- [ ] Per-call `effort` / `reasoning_effort` (low for extract/classify), measured by cost vs accuracy
-- [ ] Self-check: verify the citations exist in the retrieved clauses and that the reply matches the decision
+- [x] Per-step `reasoning_effort` (`DISPUTE_AGENT_EFFORT="decide=medium,action=medium"`, eval `--effort`), measured on
+      golden_v1. The model's default turned out to be **no reasoning**. Adding reasoning made results *worse* (see Findings),
+      so the default stays: no effort parameter. Claude's `output_config.effort` is not wired (no Claude access to test it)
+- [x] Self-check: cited clauses must exist in the retrieved policy, and **the reply must match the decision**
+      (refund states the computed amount; reject / request_info / escalate must not promise money; request_info must ask for
+      something; escalate must say the case is being reviewed). A failed check triggers a redraft that is told what was wrong.
+      The first version had 5 false positives on real LLM replies; fixed, added as tests, and all 731 saved non-refund replies
+      re-scored clean
+
+### Bugs found in manual testing (2026-10-02, case-0aec9c90): not fixed yet, schedule with the user
+- [ ] `resume` uses the default brain (rules) instead of the brain the case started with; the case should store its settings
+- [ ] Usage/cost is overwritten instead of accumulated across processes (the resumed case showed "0 LLM calls, $0")
+- [ ] Citation relevance: the LLM cited POL-UNA-02 (repeat claims) although history showed none; self-check only checks
+      that cited clauses *exist*, not that they *apply*
 
 ### Days 6–7: retrieval and a living knowledge base
 - [ ] Hybrid retrieval: BM25 plus embeddings plus a reranker. Build a labelled query→clause set and report recall@k and MRR
@@ -121,6 +133,18 @@ Write down what broke and what fixed it. This is README and interview material.
   the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
   didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
   On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-02: more reasoning made the agent worse here.** gpt-5.4-mini's default is *no* reasoning (0 reasoning tokens;
+  `minimal` is rejected by LiteLLM). One run each on golden_v1:
+  plan/none 99.5% · plan/decide=medium 98.0% · plan/all=low 95.6% · agent/none 100% · agent/decide+action=medium 99.0%.
+  Every extra error is the same pattern: "I don't recognise this payment" (normal amount, policy says refund) escalated
+  by the model's own choice. With more reasoning the model becomes over-cautious about fraud and overrides the policy.
+  In agent mode, medium effort also made the agent **skip more checks itself** (code coverage fills 25% → 46%) at +86% cost
+  ($0.013 vs $0.007/case) and +59% latency (20.5 s vs 12.9 s). All errors were safe (0 unsafe refunds). Lesson: more
+  reasoning is not free accuracy. For a policy-following task it can make the model second-guess the rules. Measure it.
+- **2026-10-02: the reply check had false positives.** "please contact GadgetHub first… send us the details" was flagged as
+  "not asking for info", and "we can't provide a refund or provisional credit" as "promising money". Fixed with positive-
+  phrasing patterns plus regression tests from the real replies. Lesson: a checker needs its own eval, or it quietly
+  blocks good outputs.
 - **2026-10-02: agent vs plan.** Plan mode (scripted tools): 99.0% decisions, stable across 3 runs, with 3 flaky cases.
   Agent mode: 100% in all 3 runs, 0 flaky, but **2.7× the cost** ($0.0074 vs $0.0027) and **2.4× the latency** (11.9 s vs 4.9 s),
   and 24% of cases needed a code coverage fill. Ablation without fills: **94.6%**. The agent skipped the transaction search

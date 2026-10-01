@@ -8,3 +8,4 @@ eval/results/
 .pytest_cache/
 data/router_*.jsonl
 data/router/
+data/cases.sqlite

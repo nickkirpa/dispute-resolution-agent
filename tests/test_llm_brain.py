@@ -80,3 +80,21 @@ def test_openai_brain_reads_litellm_cost_header():
     assert brain.classify("charged twice", Claim()).dispute_type == DisputeType.DUPLICATE_CHARGE
     assert calls[0]["response_format"] is Classification
     assert brain.usage.cost_usd == pytest.approx(0.0012) and brain.cost_source == "litellm-header"
+
+
+def test_openai_brain_sends_per_step_effort():
+    from dispute_agent.config import _parse_effort
+    from dispute_agent.llm_brain import OpenAIBrain
+    from dispute_agent.state import Claim
+
+    assert _parse_effort("decide=medium, action=low") == {"decide": "medium", "action": "low"}
+    out = Classification(dispute_type=DisputeType.OTHER, confidence=0.5)
+    completion = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=out, refusal=None), finish_reason="stop")],
+                                 usage=SimpleNamespace(prompt_tokens=1, completion_tokens=1))
+    calls = []
+    parse = lambda **kw: (calls.append(kw), FakeRaw(completion, {}))[1]
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(with_raw_response=SimpleNamespace(parse=parse))))
+    brain = OpenAIBrain(client=client, effort_by_step={"classify": "medium"})
+    brain.classify("x", Claim())
+    brain.complete("x", Classification)  # step "generate": no override, no global -> parameter omitted
+    assert calls[0]["reasoning_effort"] == "medium" and "reasoning_effort" not in calls[1]

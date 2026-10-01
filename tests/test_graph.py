@@ -96,3 +96,55 @@ def test_case_survives_process_restart_via_sqlite(tmp_path):
     assert fresh.get_state(config).next == ("human_review",)
     final = fresh.invoke(Command(resume={"decision": "refund", "refund_amount": 899.0, "note": "ok"}), config=config)
     assert final["decision"] == Decision.REFUND and final["refund_amount"] == 899.0
+
+
+def test_reply_must_match_decision():
+    from dispute_agent.graph import reply_consistency_errors as check
+
+    assert check(Decision.REFUND, "We have issued a provisional credit of 9.99 EUR.", 9.99) == []
+    assert check(Decision.REFUND, "We have issued a provisional credit.", 9.99)  # amount missing
+    assert check(Decision.REJECT, "Sorry, we are unable to accept this dispute.", 0) == []
+    assert check(Decision.REJECT, "We have refunded the payment.", 0)  # contradicts the decision
+    assert check(Decision.REQUEST_INFO, "Could you send the transaction date?", 0) == []
+    assert check(Decision.REQUEST_INFO, "Thank you for contacting us.", 0)  # asks for nothing
+    assert check(Decision.ESCALATE, "A dispute specialist will contact you.", 0) == []
+    assert check(Decision.ESCALATE, "You will receive a refund shortly, a specialist will confirm.", 0)
+
+
+def test_reply_check_accepts_real_llm_replies_that_were_false_positives():
+    """Replies from the 2026-10-02 effort runs that the first version of the check wrongly flagged."""
+    from dispute_agent.graph import reply_consistency_errors as check
+
+    ok_request_info = [
+        "Before we can review this not-received dispute, please contact GadgetHub first and keep a record of your attempt. "
+        "If the issue is still unresolved after that, send us the details of your contact and we can reopen the case.",
+        "Please first contact GadgetHub to try to resolve the issue, and keep any proof of that contact. If the order is still "
+        "unresolved after 15 days, please reach back out to us and we'll review the case.",
+    ]
+    for reply in ok_request_info:
+        assert check(Decision.REQUEST_INFO, reply, 0) == []
+    reject = ("We reviewed your dispute and can't provide a refund or provisional credit for this charge. Our records already "
+              "show a matching merchant credit from BookNest posted on 2026-07-15.")
+    assert check(Decision.REJECT, reject, 0) == []
+    assert check(Decision.REJECT, "We have issued a provisional credit of 59.00 EUR.", 0)  # still caught
+
+
+def test_failed_self_check_triggers_targeted_redraft():
+    class BadFirstDraft(RuleBrain):
+        def __init__(self, merchants):
+            super().__init__(merchants)
+            self.seen_errors = []
+
+        def draft_response(self, state):
+            self.seen_errors.append(list(state.self_check_errors))
+            if len(self.seen_errors) == 1:
+                return "We have refunded you. (Policy reference: POL-DUP-02)"  # wrong for a reject
+            return super().draft_response(state)
+
+    led = build_fixture_ledger()
+    brain = BadFirstDraft(led.merchants())
+    deps = Deps(brain=brain, ledger=led, kb=KnowledgeBase(Settings().kb_dir, "v1"))
+    out = run_case(build_graph(deps), CaseState(case_id="d", customer_id="C002", as_of="2026-09-30",
+                   narrative="Netflux charged me 15.99 EUR twice, once in July and again in August."))
+    assert out["decision"] == Decision.REJECT and out["draft_attempts"] == 2 and out["self_check_errors"] == []
+    assert brain.seen_errors[0] == [] and any("must not promise" in e for e in brain.seen_errors[1])
