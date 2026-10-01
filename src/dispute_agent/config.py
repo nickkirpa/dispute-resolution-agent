@@ -26,6 +26,9 @@ class Settings(BaseModel):
     price_model: str | None = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_PRICE_MODEL"))
     kb_dir: Path = ROOT / "kb" / "policies"
     kb_version: str = "latest"
+    evidence_mode: str = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_EVIDENCE", "plan"))  # plan | agent
+    coverage_fill: bool = True  # agent mode: code runs policy-critical checks the agent skipped (False = ablation)
+    max_tool_calls: int = 6  # agent-mode budget per case (invalid and refused calls count too)
     max_steps: int = 12  # hard step budget for one case
     max_draft_attempts: int = 2  # self-check retries before escalation
     human_review_amount: float = 500.0  # refunds above this always go to a human

@@ -80,6 +80,12 @@ class PromptBrain:
     def _parse(self, prompt: str, schema: type[BaseModel]) -> BaseModel:  # pragma: no cover - abstract
         raise NotImplementedError
 
+    def next_action(self, prompt: str):
+        """Agent mode: choose the next evidence-gathering tool call (see evidence.py)."""
+        from .evidence import AgentAction
+
+        return self._parse(prompt, AgentAction)
+
     def complete(self, prompt: str, schema: type[BaseModel]) -> BaseModel:
         """Generic typed call (used by data-generation scripts)."""
         return self._parse(prompt, schema)

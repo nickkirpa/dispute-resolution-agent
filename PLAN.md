@@ -74,10 +74,14 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
       narratives for faithfulness (e.g. "no contact" cases must not imply contact). **Reviewed: 203 approved, 1 rejected (excluded)**
 
 ### Days 3–5: the agent core
-- [ ] Per-call `effort` (e.g. `low` for extract/classify, higher for decide) through `output_config`, measured by cost vs accuracy
-- [ ] Turn `gather_evidence` into a **bounded LLM tool-use loop**: the model picks tools, a tool budget is enforced,
-      and invalid calls are handled. Keep the deterministic plan as the fallback and the baseline
-- [ ] Add a SQLite checkpointer for persistence; show crash/resume and human-review resume in the CLI
+- [x] `gather_evidence` is a **bounded LLM tool-use loop** (`evidence.py`): typed actions through structured outputs (works with
+      any provider), a budget of 6 calls, repeat calls refused, errors fed back, plan fallback on model failure, and code-run
+      coverage fills recorded per case. Plan mode is now the same executor running a scripted call list
+- [x] Plan vs agent, 3 runs each on golden_v1 (203 cases). Ablation without coverage fills. Results in README and Findings
+- [x] SQLite checkpointer: `dispute-agent run / pending / show / resume` across processes; checkpoint types allow-listed;
+      restart test
+- [x] `--repeats N` in the eval: mean ± std, flaky cases, always-wrong cases
+- [ ] Per-call `effort` / `reasoning_effort` (low for extract/classify), measured by cost vs accuracy
 - [ ] Self-check: verify the citations exist in the retrieved clauses and that the reply matches the decision
 
 ### Days 6–7: retrieval and a living knowledge base
@@ -117,6 +121,13 @@ Write down what broke and what fixed it. This is README and interview material.
   the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
   didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
   On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-02: agent vs plan.** Plan mode (scripted tools): 99.0% decisions, stable across 3 runs, with 3 flaky cases.
+  Agent mode: 100% in all 3 runs, 0 flaky, but **2.7× the cost** ($0.0074 vs $0.0027) and **2.4× the latency** (11.9 s vs 4.9 s),
+  and 24% of cases needed a code coverage fill. Ablation without fills: **94.6%**. The agent skipped the transaction search
+  (it went straight to `find_duplicates`) or skipped the duplicate check. **Every** no-fill failure was safe (request_info or
+  escalate, 0 unsafe refunds). Lesson: let the agent explore, but code must guarantee the checks that policy depends on.
+  Open question: is +1 pp worth 2.7× cost? On this easy synthetic set, the plan wins on cost. Agent mode should pay off on
+  messier cases (multiple candidate transactions, ambiguous merchants), which golden v2 should add.
 - **2026-10-01: rule baseline on free text** drops to 84% (it misses "I contacted BookNest" and "charged X, agreed Y" phrasings).
   A good illustration of why the LLM brain exists.
 - **2026-10-01: CFPB narratives are gone** from public exports, so the router uses Banking77 (see Data).

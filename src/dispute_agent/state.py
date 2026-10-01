@@ -85,6 +85,10 @@ class CaseState(BaseModel):
     evidence: Annotated[list[Evidence], operator.add] = Field(default_factory=list)
     clauses: list[PolicyClause] = Field(default_factory=list)
     kb_version: str | None = None
+    evidence_mode: str = ""  # plan | agent | plan_fallback
+    tool_calls: list[dict] = Field(default_factory=list)  # audit trail of every tool call (args, reason, observation)
+    coverage_fills: list[str] = Field(default_factory=list)  # checks code had to run because the agent skipped them
+    fallback_error: str | None = None
     missing_evidence: list[str] = Field(default_factory=list)
 
     # outcome
@@ -106,3 +110,9 @@ class CaseState(BaseModel):
 
     def evidence_of(self, kind: str) -> list[Evidence]:
         return [e for e in self.evidence if e.kind == kind]
+
+
+# Types the checkpointer may rebuild when it loads a saved case. Explicit allow-list: loading a checkpoint must not
+# be able to instantiate arbitrary classes.
+CHECKPOINT_TYPES = [("dispute_agent.state", name) for name in
+                    ("CaseState", "Claim", "Evidence", "PolicyClause", "Usage", "Decision", "DisputeType")]

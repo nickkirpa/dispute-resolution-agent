@@ -15,7 +15,8 @@ intake → classify → gather_evidence → policy_check → decide → draft_re
 
 | Concern | Where | Notes |
 |---|---|---|
-| Control flow, guards | `graph.py` (LangGraph) | step budget, retry cap, money/confidence thresholds, human interrupt + resume |
+| Control flow, guards | `graph.py` (LangGraph) | step budget, retry cap, money/confidence/evidence guards, human interrupt + resume, SQLite checkpoints |
+| Evidence gathering | `evidence.py` | one tool executor, two drivers: scripted plan, or LLM-chosen typed tool calls under a budget with refusal of repeats, error feedback, coverage fills and fallback |
 | Typed state | `state.py` (Pydantic) | evidence uses an additive reducer; usage/cost tracked per case |
 | Language + judgement | `brain.py`, `llm_brain.py` | `RuleBrain` (offline baseline) and `LLMBrain` (Claude structured outputs) behind one interface |
 | Tools | `tools/` | DuckDB ledger, duplicate search, customer history, BM25 policy KB, deterministic refund calculator |
@@ -30,28 +31,38 @@ The model handles language understanding and policy judgement only, and its prop
 ```bash
 uv sync
 uv run pytest
-uv run python eval/run_eval.py --brain rules            # offline baseline
-uv run dispute-agent "I don't recognise a 899.00 EUR charge from LuxWatch on 2026-09-15." --customer C006
-#   → pauses for human review (refund > 500 EUR), then resumes from the checkpoint
+uv run python eval/run_eval.py --brain rules --golden eval/golden_v1.jsonl     # offline baseline
 
-cp .env.example .env   # add ANTHROPIC_API_KEY
-uv run python eval/run_eval.py --brain llm --model claude-opus-5-5
+# durable cases: pause for human review, exit, resume later (state checkpointed to SQLite)
+uv run dispute-agent run "I don't recognise a 899.00 EUR charge from LuxWatch on 2026-09-15." --customer C006
+uv run dispute-agent pending
+uv run dispute-agent resume <case_id> --decision refund --refund-amount 899 --note "verified by phone"
+
+# LLM runs: configure .env (see .env.example: Anthropic, OpenAI, or a LiteLLM proxy)
+uv run python scripts/check_llm.py                                            # one-call smoke test
+uv run python eval/run_eval.py --brain llm --evidence agent --golden eval/golden_v1.jsonl --workers 8 --repeats 3
 ```
 
-## Results (golden_v1: 204 cases, 17 scenarios, single run, 2026-10-01)
+## Results (golden_v1: 203 human-reviewed cases, 17 scenarios, gpt-5.4-mini via LiteLLM)
 
-| Brain | Decision acc. | Refund amount acc. | Citation recall | **Unsafe refunds** | Cost / case | Latency / case |
-|---|---|---|---|---|---|---|
-| RuleBrain (regex baseline) | 84.3% | 94.1% | 85.8% | 0.0% | $0 | 3 ms |
-| gpt-5.4-mini (via LiteLLM) | 99.0% | 99.5% | 99.3% | **0.0%** | $0.003 | 4.8 s |
+| Configuration | Decision acc. (3 runs) | Unsafe refunds | Flaky cases | Cost / case | Latency / case |
+|---|---|---|---|---|---|
+| RuleBrain, regex baseline | 84.2% | 0% | 0 | $0 | 3 ms |
+| LLM + **scripted evidence plan** | 99.0% ± 0.0 | 0% | 3 | $0.0027 | 4.9 s |
+| LLM + **agent tool loop** + code coverage checks | **100.0% ± 0.0** | 0% | 0 | $0.0074 | 11.9 s |
+| *ablation:* agent loop, no coverage checks (1 run) | 94.6% | **0%** | – | $0.0072 | – |
 
-- Labels are correct by construction: scenarios are built in code and the LLM writes only the complaint text.
-- *Unsafe refund* means money paid where policy says no. Code guards hold it at 0. In this run the evidence-contradiction
-  guard stopped one model-proposed payout (V1-0196), and the case went to a human instead.
-- Caveats: one run, one model, synthetic narratives, and a fictional policy. Variance across runs and harder, human-written
-  cases are next (see PLAN.md).
+What this shows:
+- **The agent is more accurate but not free:** +1 pp over the scripted plan for 2.7× the cost and 2.4× the latency.
+- **The agent alone skips checks.** Without code coverage checks it sometimes never searched for the transaction or never
+  checked for duplicates. All of those failures were *safe* (it asked for more info or escalated) because the money and
+  evidence guards hold regardless of what the agent does.
+- *Unsafe refund* means money paid where policy says no. It is 0 in every configuration.
 
-Reproduce: `uv run python eval/run_eval.py --brain llm --golden eval/golden_v1.jsonl --workers 8`
+Caveats: synthetic narratives (human-reviewed), a fictional policy, one model. Labels are correct by construction (scenarios
+are built in code; the LLM writes only the complaint text).
+
+Reproduce: `uv run python eval/run_eval.py --brain llm --evidence agent --golden eval/golden_v1.jsonl --workers 8 --repeats 3`
 
 ## Data
 Banking77 (public, CC-BY-4.0) for the router, hand-written golden-set complaints, a synthetic ledger and a fictional policy handbook. No real customer or company data.

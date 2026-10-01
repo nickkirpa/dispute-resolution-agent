@@ -82,6 +82,11 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
         "citation_recall": len(cited & expected_clauses) / len(expected_clauses),
         "unsafe_refund": bool(decision) and decision.value == "refund" and g["expected_decision"] != "refund",
         "guard_reason": out.get("human_reason", "") if out.get("human_reason", "").startswith("guard:") else "",
+        "evidence_mode": out.get("evidence_mode"),
+        "agent_tool_calls": sum(c["reason"] != "coverage" and c["tool"] != "finish" for c in out.get("tool_calls", [])),
+        "invalid_tool_calls": sum(not c["ok"] for c in out.get("tool_calls", [])),
+        "coverage_fills": out.get("coverage_fills", []),
+        "fallback_error": out.get("fallback_error"),
         "self_check_errors": out.get("self_check_errors", []),
         "steps": out.get("steps", 0),
         "llm_calls": usage.llm_calls,
@@ -93,8 +98,13 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
 
 
 def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: Path = ROOT / "eval" / "golden.jsonl",
-             workers: int = 1) -> dict:
-    settings = Settings() if model is None else Settings(model=model)
+             workers: int = 1, evidence: str | None = None, no_fill: bool = False) -> dict:
+    overrides = {k: v for k, v in {"model": model, "evidence_mode": evidence}.items() if v}
+    if no_fill:
+        overrides["coverage_fill"] = False
+    settings = Settings(**overrides)
+    if settings.evidence_mode == "agent" and brain_kind == "rules":
+        raise SystemExit("--evidence agent needs an LLM brain (--brain llm)")
     golden = load_golden(golden_path)
     ledger = build_ledger(golden)
     kb = KnowledgeBase(settings.kb_dir, settings.kb_version)
@@ -103,7 +113,8 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
 
     n = len(rows)
     summary = {
-        "brain": brain_kind if brain_kind == "rules" else f"llm:{settings.model}",
+        "brain": (brain_kind if brain_kind == "rules" else f"llm:{settings.model}") + f"+{settings.evidence_mode}"
+                 + ("" if settings.coverage_fill else "-nofill"),
         "golden": golden_path.name,
         "kb_version": kb.version,
         "n_cases": n,
@@ -117,11 +128,37 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
         "self_check_failure_rate": sum(bool(r["self_check_errors"]) for r in rows) / n,
         "crash_rate": sum(bool(r["error"]) for r in rows) / n,
         "avg_steps": sum(r["steps"] for r in rows) / n,
+        "evidence_mode": settings.evidence_mode,
+        "avg_agent_tool_calls": sum(r["agent_tool_calls"] for r in rows) / n,
+        "invalid_tool_call_rate": sum(r["invalid_tool_calls"] for r in rows) / max(1, sum(r["agent_tool_calls"] for r in rows)),
+        "coverage_fill_rate": sum(bool(r["coverage_fills"]) for r in rows) / n if settings.evidence_mode == "agent" else 0.0,
+        "fallback_rate": sum(bool(r["fallback_error"]) for r in rows) / n,
         "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
         "cost_per_case_usd": round(sum(r["cost_usd"] for r in rows) / n, 5),
         "avg_latency_s": round(sum(r["latency_s"] for r in rows) / n, 3),
     }
     return {"summary": summary, "cases": rows}
+
+
+METRICS = ["decision_accuracy", "refund_amount_accuracy", "citation_recall", "unsafe_refund_rate", "escalation_rate",
+           "avg_agent_tool_calls", "coverage_fill_rate", "fallback_rate", "cost_per_case_usd", "avg_latency_s"]
+
+
+def aggregate(reports: list[dict]) -> dict:
+    """Mean / min / max per metric across repeated runs, plus cases whose decision changed between runs."""
+    agg = {}
+    for m in METRICS:
+        vals = [r["summary"][m] for r in reports]
+        mean = sum(vals) / len(vals)
+        std = (sum((v - mean) ** 2 for v in vals) / max(1, len(vals) - 1)) ** 0.5
+        agg[m] = {"mean": round(mean, 5), "std": round(std, 5), "min": min(vals), "max": max(vals)}
+    by_case: dict[str, set] = {}
+    for r in reports:
+        for c in r["cases"]:
+            by_case.setdefault(c["case_id"], set()).add(c["decision"])
+    flaky = sorted(k for k, v in by_case.items() if len(v) > 1)
+    always_wrong = sorted(k for k in by_case if all(not next(c for c in r["cases"] if c["case_id"] == k)["decision_ok"] for r in reports))
+    return {"runs": len(reports), "metrics": agg, "flaky_cases": flaky, "always_wrong": always_wrong}
 
 
 def main() -> None:
@@ -131,9 +168,27 @@ def main() -> None:
     ap.add_argument("--model", default=None, help="Claude model id for --brain llm (default from settings)")
     ap.add_argument("--golden", type=Path, default=ROOT / "eval" / "golden.jsonl")
     ap.add_argument("--workers", type=int, default=1, help="parallel cases (LLM runs: 4-8 is reasonable)")
+    ap.add_argument("--evidence", choices=["plan", "agent"], default=None, help="evidence gathering driver (default: settings)")
+    ap.add_argument("--repeats", type=int, default=1, help="run the whole set N times and report mean/std + flaky cases")
+    ap.add_argument("--no-fill", action="store_true", help="ablation: agent mode without code coverage fills")
     args = ap.parse_args()
 
-    report = evaluate(args.brain, args.model, args.golden, args.workers)
+    if args.repeats > 1:
+        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill) for _ in range(args.repeats)]
+        agg = aggregate(reports) | {"brain": reports[0]["summary"]["brain"], "golden": args.golden.name}
+        out_dir = ROOT / "eval" / "results"
+        out_dir.mkdir(exist_ok=True)
+        out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{re.sub(r'[^A-Za-z0-9.-]+', '_', agg['brain'])}-x{args.repeats}.json"
+        out.write_text(json.dumps({"aggregate": agg, "runs": reports}, indent=2, default=str))
+        print(f"{agg['brain']} on {agg['golden']}, {agg['runs']} runs")
+        for m, v in agg["metrics"].items():
+            print(f"{m:>26}: {v['mean']:.4f} ± {v['std']:.4f}  [{v['min']:.4f}, {v['max']:.4f}]")
+        print(f"flaky cases (decision changed between runs): {agg['flaky_cases'] or 'none'}")
+        print(f"wrong in every run: {agg['always_wrong'] or 'none'}")
+        print(f"\nReport: {out.relative_to(ROOT)}")
+        return
+
+    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill)
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
     out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{re.sub(r'[^A-Za-z0-9.-]+', '_', report['summary']['brain'])}.json"

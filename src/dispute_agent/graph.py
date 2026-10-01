@@ -20,7 +20,8 @@ from langgraph.types import interrupt
 from .brain import Brain
 from .config import Settings
 from .llm_brain import LLMRefusal
-from .state import CaseState, Decision, DisputeType, Evidence
+from .evidence import ToolBox, fill_coverage, finalize, run_agent, run_plan
+from .state import CaseState, Decision, DisputeType
 from .tools import KnowledgeBase, Ledger, compute_refund
 
 
@@ -81,60 +82,25 @@ def build_graph(deps: Deps, checkpointer=None):
         return _step("classify", state, dispute_type=c.dispute_type, type_confidence=c.confidence, usage=deps.brain.usage.model_copy())
 
     def gather_evidence(state: CaseState) -> dict:
-        """Deterministic tool plan per dispute type (Day 3-5 TODO: bounded LLM tool-use loop, this stays as fallback)."""
-        claim, t = state.claim, state.dispute_type
-        around = date.fromisoformat(claim.transaction_date) if claim and claim.transaction_date else None
-        evidence: list[Evidence] = []
-
-        # widen the search progressively: merchant+amount+date -> merchant+amount -> merchant -> amount
-        attempts = [
-            dict(merchant=claim.merchant, amount=claim.amount, around=around),
-            dict(merchant=claim.merchant, amount=claim.amount),
-            dict(merchant=claim.merchant),
-            dict(amount=claim.amount),
-        ]
-        matching: list[dict] = []
-        for kw in attempts:
-            if not any(v is not None for v in kw.values()):
-                continue
-            matching = deps.ledger.find_transactions(state.customer_id, **kw)
-            if matching:
-                break
-        if matching:
-            first = matching[0]
-            dates = ", ".join(str(m["txn_date"]) for m in matching)
-            evidence.append(Evidence(source="ledger", kind="matching_transaction",
-                                     summary=f"{len(matching)} matching charge(s) of {first['amount']} {first['currency']} at {first['merchant']} on: {dates}",
-                                     data=first | {"n_matches": len(matching), "all_dates": [str(m["txn_date"]) for m in matching]}))
-            evidence.append(Evidence(source="ledger", kind="filing_window",
-                                     summary=f"{(state.as_of - first['txn_date']).days} days since transaction",
-                                     data={"days_since_transaction": (state.as_of - first["txn_date"]).days}))
-
-        if t == DisputeType.DUPLICATE_CHARGE and matching:
-            dups = deps.ledger.find_duplicates(state.customer_id, matching[0]["merchant"], matching[0]["amount"])
-            if dups:
-                evidence.append(Evidence(source="ledger", kind="duplicate_transactions",
-                                         summary=f"{len(dups[0])} identical charges within 3 days", data={"groups": dups}))
-            else:  # negative evidence: say explicitly what the tool did NOT find, so the model can't assume it
-                evidence.append(Evidence(source="ledger", kind="no_duplicates",
-                                         summary="No identical charges posted within 3 days of each other (duplicate search returned nothing)",
-                                         data={"window_days": 3}))
-        if t == DisputeType.REFUND_NOT_PROCESSED and matching:
-            refunds = deps.ledger.refunds_for(state.customer_id, matching[0]["merchant"])
-            if refunds:
-                evidence.append(Evidence(source="ledger", kind="merchant_refunds",
-                                         summary=f"{len(refunds)} credit(s) from merchant already posted", data={"refunds": refunds}))
-            else:
-                evidence.append(Evidence(source="ledger", kind="no_merchant_refunds",
-                                         summary="No credit from this merchant has been posted to the account", data={}))
-
-        history = deps.ledger.customer_history(state.customer_id, state.as_of)
-        evidence.append(Evidence(source="history", kind="customer_history", summary=str(history), data=history))
-
-        # policy retrieval: type-specific clauses by BM25 + all general clauses (small KB; revisit on Day 6-7)
-        specific = [c for c in deps.kb.search(f"{t.value} {state.narrative}", k=10, dispute_type=t.value) if t.value in c.applies_to][: s.kb_top_k]
-        general = [c for c in deps.kb.clauses if "all" in c.applies_to]
-        return _step("gather_evidence", state, evidence=evidence, clauses=specific + general, kb_version=deps.kb.version)
+        """Plan mode: scripted tool calls. Agent mode: LLM-chosen tool calls under a budget, falling back to the plan
+        on any model failure. Both run through the same ToolBox; coverage gaps are filled by code and recorded."""
+        box = ToolBox(ledger=deps.ledger, kb=deps.kb, state=state)
+        mode, fills, error = s.evidence_mode, [], None
+        if mode == "agent":
+            ran_policy, error = run_agent(box, deps.brain, s.max_tool_calls)
+            if error:
+                box, mode = ToolBox(ledger=deps.ledger, kb=deps.kb, state=state), "plan_fallback"
+                run_plan(box)
+                fill_coverage(box, ran_policy_search=False)
+            elif s.coverage_fill:
+                fills = fill_coverage(box, ran_policy_search=ran_policy)
+        else:
+            run_plan(box)
+            fill_coverage(box, ran_policy_search=False)
+        evidence, clauses = finalize(box)
+        return _step("gather_evidence", state, evidence=evidence, clauses=clauses, kb_version=deps.kb.version,
+                     evidence_mode=mode, tool_calls=box.calls, coverage_fills=fills, fallback_error=error,
+                     usage=deps.brain.usage.model_copy())
 
     def policy_check(state: CaseState) -> dict:
         """Which evidence does policy require that we don't have? Deterministic."""

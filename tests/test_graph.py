@@ -68,3 +68,31 @@ def test_refund_contradicting_evidence_goes_to_human():
                    narrative="AirFly promised me a refund for my cancelled 410.00 EUR flight booked on 2026-08-01, but the refund never arrived."))
     assert out["decision"] == Decision.ESCALATE and out["refund_amount"] == 0.0
     assert "merchant credit already posted" in out["human_reason"]
+
+
+def test_case_survives_process_restart_via_sqlite(tmp_path):
+    """Pause for human review, drop the app (simulated restart), rebuild from the same DB file, resume."""
+    import sqlite3
+
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    from dispute_agent.state import CHECKPOINT_TYPES
+
+    db = tmp_path / "cases.sqlite"
+
+    def app():
+        conn = sqlite3.connect(db, check_same_thread=False)
+        led = build_fixture_ledger()
+        deps = Deps(brain=RuleBrain(led.merchants()), ledger=led, kb=KnowledgeBase(Settings().kb_dir), human_in_loop=True)
+        return build_graph(deps, checkpointer=SqliteSaver(conn, serde=JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)))
+
+    config = {"configurable": {"thread_id": "restart"}}
+    first = app().invoke(CaseState(case_id="restart", customer_id="C006", as_of="2026-09-30",
+                                   narrative="I don't recognise a 899.00 EUR charge from LuxWatch on 2026-09-15."), config=config)
+    assert "__interrupt__" in first
+
+    fresh = app()  # new graph, new connection: only the DB file carries the case
+    assert fresh.get_state(config).next == ("human_review",)
+    final = fresh.invoke(Command(resume={"decision": "refund", "refund_amount": 899.0, "note": "ok"}), config=config)
+    assert final["decision"] == Decision.REFUND and final["refund_amount"] == 899.0
