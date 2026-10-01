@@ -33,6 +33,26 @@ class Deps:
     human_in_loop: bool = False  # True: pause at human_review (interrupt). False: auto-escalate (evals, batch).
 
 
+def normalize_claim_date(iso: str | None, as_of: date) -> str | None:
+    """Customers rarely state the year. If the extracted date is in the future or more than a year old,
+    move it to the most recent past occurrence of that month/day. Unparseable dates are dropped."""
+    if not iso:
+        return None
+    try:
+        d = date.fromisoformat(iso)
+    except ValueError:
+        return None
+    if d > as_of or (as_of - d).days > 366:
+        for year in (as_of.year, as_of.year - 1):
+            try:
+                cand = d.replace(year=year)
+            except ValueError:  # 29 Feb
+                continue
+            if cand <= as_of:
+                return cand.isoformat()
+    return d.isoformat()
+
+
 def _step(name: str, state: CaseState, **update) -> dict:
     return {"steps": state.steps + 1, "trace": [name], **update}
 
@@ -47,9 +67,10 @@ def build_graph(deps: Deps, checkpointer=None):
     # ------------------------------------------------------------------ nodes
     def intake(state: CaseState) -> dict:
         try:
-            claim = deps.brain.extract_claim(state.narrative)
+            claim = deps.brain.extract_claim(state.narrative, state.as_of)
         except LLMRefusal as e:
             return _escalate("intake", state, f"model refusal: {e}", deps)
+        claim = claim.model_copy(update={"transaction_date": normalize_claim_date(claim.transaction_date, state.as_of)})
         return _step("intake", state, claim=claim, usage=deps.brain.usage.model_copy())
 
     def classify(state: CaseState) -> dict:
@@ -145,6 +166,19 @@ def build_graph(deps: Deps, checkpointer=None):
             refund = compute_refund(state.dispute_type, state.claim, matching, dups[0].data["groups"] if dups else [])
             if refund <= 0:
                 needs_human, reason = True, "guard: refund proposed but amount computes to 0"
+
+        # guard 2b: a refund must not contradict hard evidence -> a human looks at the conflict (no silent override)
+        if decision == Decision.REFUND:
+            window = state.evidence_of("filing_window")
+            conflicts = []
+            if state.dispute_type == DisputeType.DUPLICATE_CHARGE and not state.evidence_of("duplicate_transactions"):
+                conflicts.append("no duplicate charges found")
+            if state.dispute_type == DisputeType.REFUND_NOT_PROCESSED and state.evidence_of("merchant_refunds"):
+                conflicts.append("merchant credit already posted")
+            if window and window[0].data["days_since_transaction"] > s.filing_window_days:
+                conflicts.append(f"filed after {s.filing_window_days} days")
+            if conflicts:
+                needs_human, reason = True, f"guard: refund contradicts evidence ({'; '.join(conflicts)})"
 
         # guard 3: thresholds
         if decision == Decision.REFUND and refund > s.human_review_amount:

@@ -39,3 +39,15 @@ def test_customer_history_counts_unauthorized_disputes():
 
     hist = build_fixture_ledger().customer_history("C007", date(2026, 9, 30))
     assert hist["unauthorized_disputes_last_12m"] == 2
+
+
+def test_claim_date_without_year_is_moved_to_recent_past():
+    from datetime import date
+
+    from dispute_agent.graph import normalize_claim_date
+
+    as_of = date(2026, 9, 30)
+    assert normalize_claim_date("2024-09-07", as_of) == "2026-09-07"  # model guessed the wrong year
+    assert normalize_claim_date("2026-12-24", as_of) == "2025-12-24"  # future -> last year
+    assert normalize_claim_date("2026-08-01", as_of) == "2026-08-01"  # plausible dates untouched
+    assert normalize_claim_date("not a date", as_of) is None

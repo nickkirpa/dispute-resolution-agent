@@ -61,10 +61,13 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
 
 ### Days 1–2: data
 - [x] Download Banking77 and map intents → `DisputeType` (train 10,003 / test 3,080; ~84% `other`, which is realistic for a router)
-- [ ] Write ~300 `not_received` examples (synthetic, reviewed by hand) to fill the Banking77 gap; carve a validation split from train
-- [ ] Extend `generate_ledger.py` so each golden case gets matching synthetic transactions
-- [ ] Grow the golden set to ~200 cases (stratified by type × decision). **Label decisions by hand**,
-      using the LLM only to propose labels
+- [x] 300 synthetic `not_received` router messages (`data/synthetic/not_received.jsonl`, $0.04). **Review pending (me)**.
+      Report router metrics on this class separately (LLM-written, so it's an easier distribution than human text)
+- [ ] Carve a validation split from Banking77 train (stratified) when training the router
+- [x] Golden cases carry their own ledger rows (`ledger` field); the eval builds one DuckDB from them and runs in parallel
+- [x] `golden_v1.jsonl`: **204 cases, 17 scenarios × 12, labels correct by construction** (`scripts/generate_golden.py`).
+      The LLM writes narratives only, and automatic checks require the merchant and amounts. **Review pending (me)**: skim
+      narratives for faithfulness (e.g. "no contact" cases must not imply contact) and set `review_status`
 
 ### Days 3–5: the agent core
 - [ ] Per-call `effort` (e.g. `low` for extract/classify, higher for decide) through `output_config`, measured by cost vs accuracy
@@ -104,6 +107,14 @@ Write down what broke and what fixed it. This is README and interview material.
   the evidence listed "2 matching charges" without both dates, and nothing said "no duplicates found". After adding all matching dates
   and explicit `no_duplicates` / `no_merchant_refunds` evidence, the case was decided correctly. Lesson: tools should report what they
   did *not* find. Otherwise the model fills the gap.
+- **2026-10-01: dates without a year.** "dated 7 September": the model filled in 2024, decide saw a ledger mismatch and rejected.
+  Fix: give extraction today's date, plus deterministic `normalize_claim_date` (future or >1y old moves to the most recent past occurrence).
+- **2026-10-01: an unsafe payout the money guard missed.** For refund_not_processed, the model refunded although the ledger showed
+  the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
+  didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
+  On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-01: rule baseline on free text** drops to 84% (it misses "I contacted BookNest" and "charged X, agreed Y" phrasings).
+  A good illustration of why the LLM brain exists.
 - **2026-10-01: CFPB narratives are gone** from public exports, so the router uses Banking77 (see Data).
 
 ## Rules

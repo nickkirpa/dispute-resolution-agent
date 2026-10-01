@@ -39,6 +39,23 @@ class Ledger:
         if not read_only:
             self.con.execute(SCHEMA)
 
+    def fork(self) -> "Ledger":
+        """A new cursor on the same database: DuckDB connections are not thread-safe, cursors are cheap."""
+        other = Ledger.__new__(Ledger)
+        other.con = self.con.cursor()
+        return other
+
+    def load(self, customers: list = (), transactions: list = (), disputes: list = ()) -> "Ledger":
+        """Bulk insert rows: customers (id, name, opened_on), transactions (id, cust, merchant, amount, date, channel),
+        disputes (id, cust, txn_id, type, opened_on, outcome)."""
+        if customers:
+            self.con.executemany("INSERT INTO customers VALUES (?, ?, ?)", [list(r) for r in customers])
+        if transactions:
+            self.con.executemany("INSERT INTO transactions VALUES (?, ?, ?, ?, 'EUR', ?, ?)", [list(r) for r in transactions])
+        if disputes:
+            self.con.executemany("INSERT INTO disputes VALUES (?, ?, ?, ?, ?, ?)", [list(r) for r in disputes])
+        return self
+
     def _rows(self, sql: str, params: list) -> list[dict]:
         cur = self.con.execute(sql, params)
         cols = [d[0] for d in cur.description]

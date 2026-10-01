@@ -13,6 +13,7 @@ tests, and is the floor every LLM configuration has to beat in the evals.
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Protocol
 
 from pydantic import BaseModel, Field
@@ -36,7 +37,7 @@ class Brain(Protocol):
     name: str
     usage: Usage
 
-    def extract_claim(self, narrative: str) -> Claim: ...
+    def extract_claim(self, narrative: str, as_of: date | None = None) -> Claim: ...
     def classify(self, narrative: str, claim: Claim) -> Classification: ...
     def decide(self, state: CaseState) -> DecisionProposal: ...
     def draft_response(self, state: CaseState) -> str: ...
@@ -76,7 +77,7 @@ class RuleBrain:
         self.known_merchants = sorted(known_merchants or [], key=len, reverse=True)
         self.usage = Usage()
 
-    def extract_claim(self, narrative: str) -> Claim:
+    def extract_claim(self, narrative: str, as_of: date | None = None) -> Claim:
         text = narrative.lower()
         merchant = next((m for m in self.known_merchants if m.lower() in text), None)
         amounts = [float(a.replace(",", ".")) for a in re.findall(MONEY, text)]

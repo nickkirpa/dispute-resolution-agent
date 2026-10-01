@@ -52,3 +52,19 @@ def test_step_budget_is_enforced():
                                                 narrative="I was charged twice by SpotiTunes for 9.99 EUR on 2026-09-02."))
     assert out["decision"] == Decision.ESCALATE
     assert "human_review" in out["trace"]
+
+
+def test_refund_contradicting_evidence_goes_to_human():
+    """An LLM-style mistake: proposing a refund although the merchant already credited the customer."""
+    from dispute_agent.brain import DecisionProposal
+
+    class OverEagerBrain(RuleBrain):
+        def decide(self, state):
+            return DecisionProposal(decision=Decision.REFUND, confidence=0.95, rationale="refund", cited_clauses=["POL-REF-01"])
+
+    led = build_fixture_ledger()
+    deps = Deps(brain=OverEagerBrain(led.merchants()), ledger=led, kb=KnowledgeBase(Settings().kb_dir))
+    out = run_case(build_graph(deps), CaseState(case_id="c", customer_id="C009", as_of="2026-09-30",
+                   narrative="AirFly promised me a refund for my cancelled 410.00 EUR flight booked on 2026-08-01, but the refund never arrived."))
+    assert out["decision"] == Decision.ESCALATE and out["refund_amount"] == 0.0
+    assert "merchant credit already posted" in out["human_reason"]

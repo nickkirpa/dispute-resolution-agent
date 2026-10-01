@@ -10,6 +10,7 @@ Token usage and cost are tracked per call so the eval can report cost per case.
 from __future__ import annotations
 
 import json
+from datetime import date
 
 import anthropic
 from pydantic import BaseModel
@@ -36,7 +37,8 @@ SYSTEM = (
 EXTRACT = (
     "Extract the facts the customer asserts in this complaint. Leave fields null when not stated. "
     "`amount` is the charged amount they dispute; `claimed_correct_amount` is only for 'charged X instead of Y'. "
-    "`contacted_merchant` is true only if they say they already tried the merchant.\n\nComplaint:\n{narrative}"
+    "`contacted_merchant` is true only if they say they already tried the merchant.\n"
+    "Today is {today}. Resolve dates without a year to the most recent date on or before today.\n\nComplaint:\n{narrative}"
 )
 
 CLASSIFY = (
@@ -78,8 +80,12 @@ class PromptBrain:
     def _parse(self, prompt: str, schema: type[BaseModel]) -> BaseModel:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    def extract_claim(self, narrative: str) -> Claim:
-        return self._parse(EXTRACT.format(narrative=narrative), Claim)
+    def complete(self, prompt: str, schema: type[BaseModel]) -> BaseModel:
+        """Generic typed call (used by data-generation scripts)."""
+        return self._parse(prompt, schema)
+
+    def extract_claim(self, narrative: str, as_of: date | None = None) -> Claim:
+        return self._parse(EXTRACT.format(narrative=narrative, today=(as_of or date.today()).isoformat()), Claim)
 
     def classify(self, narrative: str, claim: Claim) -> Classification:
         return self._parse(CLASSIFY.format(narrative=narrative, claim=claim.model_dump_json()), Classification)
