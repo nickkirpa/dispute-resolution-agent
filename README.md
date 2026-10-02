@@ -5,6 +5,9 @@ investigates their account with tools, checks a versioned policy, decides **refu
 a human**, and writes the reply. The LLM handles language and judgement; **everything that moves money is enforced in
 code**.
 
+**[▶ Live demo](https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app)**: runs offline with the rule brain, plays recorded LLM agent runs, and runs the live LLM agent
+with your own OpenAI or Anthropic key (kept in your browser session only).
+
 ![Demo: an 899 EUR unauthorized-payment claim is investigated by the agent, sent to a human by the review guard, approved by the officer, and answered](docs/demo.gif)
 
 *A recorded run in the Streamlit demo: the agent investigates (5 tool calls), the review threshold sends the 899 EUR case

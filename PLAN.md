@@ -178,13 +178,14 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
         **bring-your-own-key** for live LLM runs (session-only key, official endpoints, never stored or logged, per-session
         case isolation, server env keys ignored in public mode). `requirements.txt` (no torch), `.streamlit/config.toml`
         (generic error details, viewer toolbar). Cloud install simulated in a fresh venv: public mode works
-  - [ ] **Deploy** on share.streamlit.io (me: GitHub login, New app → repo / main / `app/main.py`, Python 3.11+), then
-        smoke-test with a personal key
+  - [x] **Deployed** on Streamlit Community Cloud: https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app
+        Checked live: public mode, rule-brain case, results charts, per-session isolation (a new session sees no cases)
+  - [ ] Smoke-test the live LLM agent with a **personal** key (me)
 - [x] Demo GIF of the app (`docs/demo.gif`, recorded LLM run: investigation → guard → officer → resume → reply)
-- [ ] Resume bullet: draft below; **add the live demo link once hosted**
+- [x] Resume bullet with the live demo link (below)
 
 Resume bullet (draft, measured numbers only):
-> **Dispute Resolution Agent** (Python, LangGraph, PyTorch, OpenAI/Claude APIs, Streamlit) · github.com/nickkirpa/dispute-resolution-agent
+> **Dispute Resolution Agent** (Python, LangGraph, PyTorch, OpenAI/Claude APIs, Streamlit) · github.com/nickkirpa/dispute-resolution-agent · [live demo](https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app)
 > Built a state-driven LLM agent that resolves card-payment disputes end to end: LLM-chosen tool calls under a budget, a
 > versioned policy knowledge base with hybrid retrieval, human-in-the-loop review with durable checkpoints, and code-
 > enforced money guards. On 203 human-reviewed cases: 100% decision accuracy over 3 runs, 0% unsafe refunds, $0.0024/case.
