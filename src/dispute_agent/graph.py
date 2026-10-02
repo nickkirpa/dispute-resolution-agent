@@ -20,6 +20,7 @@ from langgraph.types import interrupt
 from .brain import Brain
 from .config import Settings
 from .llm_brain import LLMRefusal
+from .replies import fact_errors
 from .evidence import ToolBox, fill_coverage, finalize, run_agent, run_plan
 from .state import CaseState, Decision, DisputeType
 from .tools import KnowledgeBase, Ledger, compute_refund
@@ -269,6 +270,7 @@ def build_graph(deps: Deps, checkpointer=None):
         if not state.cited_clauses:
             errors.append("no policy clause cited")
         errors += reply_consistency_errors(state.decision, state.response_draft, state.refund_amount)
+        errors += fact_errors(state)
         mentioned = set(re.findall(r"POL-[A-Z]+-\d+", state.response_draft))
         if mentioned - retrieved:
             errors.append(f"draft mentions unknown clauses: {sorted(mentioned - retrieved)}")

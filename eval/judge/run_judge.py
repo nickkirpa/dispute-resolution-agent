@@ -8,6 +8,8 @@ The judge answers the same 5 questions as the human labeller (scripts/label_repl
     uv run python eval/judge/run_judge.py                          # judge = configured model (.env)
     uv run python eval/judge/run_judge.py --model openai/gpt-5.5   # a stronger judge
     uv run python eval/judge/run_judge.py --prompt v2 --votes 3    # v2 context, majority of 3 runs
+    uv run python eval/judge/run_judge.py --prompt v2 --votes 3 --report eval/results/<run>.json
+        # screening mode: judge every reply of an eval run (no human labels), e.g. to compare reply prompts
 
 Prompt versions:
   v1  case facts + reply only (the first version)
@@ -110,7 +112,10 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--prompt", choices=["v1", "v2"], default="v1")
     ap.add_argument("--votes", type=int, default=1, help="run the judge N times, majority vote per question")
+    ap.add_argument("--report", type=Path, default=None, help="screening mode: judge all replies of this eval report")
     args = ap.parse_args()
+    if args.report:
+        return screen(args)
     items = [json.loads(l) for l in (ROOT / "eval" / "judge" / "replies.jsonl").read_text().splitlines() if l.strip()]
     labels_path = ROOT / "eval" / "judge" / "labels.jsonl"
     labels = {json.loads(l)["id"]: json.loads(l) for l in labels_path.read_text().splitlines() if l.strip()} if labels_path.exists() else {}
@@ -118,7 +123,14 @@ def main() -> None:
     if not items:
         raise SystemExit("no human labels yet: run scripts/label_replies.py first")
     settings = Settings(**({"model": args.model} if args.model else {}))
+    prompt_for, judge = make_judge(args, settings)
 
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        results = list(pool.map(judge, items))
+    report_rows(args, settings, items, labels, results)
+
+
+def make_judge(args, settings):
     gold = {json.loads(l)["case_id"]: json.loads(l) for l in (ROOT / "eval" / "golden_v1.jsonl").read_text().splitlines() if l.strip()}
     kb = KnowledgeBase(settings.kb_dir, "v1")  # golden_v1 replies were produced under policy v1
 
@@ -149,8 +161,41 @@ def main() -> None:
         reason = next((r.reason for r in runs if r.send == votes["send"]), runs[0].reason)
         return Verdict(**votes, reason=reason), brain.usage.cost_usd
 
+    return prompt_for, judge
+
+
+def screen(args) -> None:
+    """Judge every reply of an eval report; report the share passing each question, overall and by decision."""
+    sys.path.insert(0, str(ROOT / "eval" / "judge"))
+    from build_sample import case_facts
+
+    settings = Settings(**({"model": args.model} if args.model else {}))
+    report = json.loads(args.report.read_text())
+    gold = {json.loads(l)["case_id"]: json.loads(l) for l in (ROOT / "eval" / "golden_v1.jsonl").read_text().splitlines() if l.strip()}
+    items = [{"id": c["case_id"], "case_id": c["case_id"], "reply": c["response_draft"], "defect": None,
+              "facts": case_facts(gold[c["case_id"]], c)} for c in report["cases"] if c.get("response_draft") and c["case_id"] in gold]
+    _, judge = make_judge(args, settings)
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         results = list(pool.map(judge, items))
+    cost = sum(c for _, c in results)
+    print(f"screening {args.report.name}: {len(items)} replies, judge {settings.model} {args.prompt} x{args.votes} (${cost:.3f})")
+    by: dict = defaultdict(lambda: defaultdict(int))
+    for it, (v, _) in zip(items, results):
+        for key in ("all", it["facts"]["decision"]):
+            by[key]["n"] += 1
+            for q in QUESTIONS:
+                by[key][q] += getattr(v, q)
+    print(f"{'decision':<13} {'n':>4} " + " ".join(f"{q:>9}" for q in QUESTIONS))
+    for key in ["all", "refund", "request_info", "reject", "escalate"]:
+        if by[key]["n"]:
+            print(f"{key:<13} {by[key]['n']:>4} " + " ".join(f"{by[key][q] / by[key]['n']:>9.2f}" for q in QUESTIONS))
+    fails = [(it["id"], it["facts"]["decision"], v.reason) for it, (v, _) in zip(items, results) if not v.send]
+    out = ROOT / "eval" / "results" / f"judge-screen-{args.report.stem}-{args.prompt}-x{args.votes}.json"
+    out.write_text(json.dumps({"report": args.report.name, "cost_usd": cost, "rates": by, "not_ok": fails}, indent=2, default=str))
+    print(f"not OK to send: {len(fails)} | Report: {out.relative_to(ROOT)}")
+
+
+def report_rows(args, settings, items, labels, results) -> None:
     verdicts = [v for v, _ in results]
     cost = sum(c for _, c in results)
 

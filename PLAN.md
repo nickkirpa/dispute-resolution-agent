@@ -147,6 +147,17 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
 - [x] GitHub Actions: `ci.yml` (tests + rule-brain evals with `--min-accuracy` / `--max-unsafe` gates on every push, green);
       `llm-eval.yml` on demand only, personal key via secrets (never the employer key)
 
+### Reply-quality fixes (from the labelling findings, 2026-10-02)
+- [x] `replies.py`: the writer gets **facts computed by code** (day counts, refund amount, what the customer already gave)
+      and decision-specific guidance (not found: say so and ask only for the date or a statement screenshot; reject:
+      acknowledge and give a next step, e.g. "cancel the subscription with the merchant"; refund: "provisional credit";
+      escalate: no outcome or timeline promised). Rule templates follow the same guidance
+- [x] New self-checks: every "N days" in a reply must equal a computed or policy value; a not-found reply must say the
+      charge was not found. Tests use the real failing replies ("40 days", "couldn’t" with a typographic apostrophe)
+- [x] Measured with the validated judge (v2, 3 votes) on the same 203 cases, old vs new writer: "OK to send" 72% → 76%,
+      request_info facts 0.71 → 0.92 (no more re-asking), clarity 0.98 → 1.00, decisions unchanged (99.5%, 0 unsafe).
+      Most remaining request_info "fails" are judge false alarms: it calls POL-NR-02's own 15-day instruction "invented"
+
 ### Days 13–14: presentation
 - [ ] README: architecture diagram, results table, design decisions ("why a state machine and not a ReAct loop")
 - [ ] **Streamlit demo app** (`app/`, `uv run streamlit run app/main.py`), reusing the agent code directly:
@@ -179,6 +190,10 @@ Write down what broke and what fixed it. This is README and interview material.
   the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
   didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
   On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-02: fixing replies with a judge in the loop.** Using the validated judge as a before/after metric worked,
+  but its known bias (over-strict on "promises") hides part of the gain: it flagged the policy's own 15-day wording as
+  invented. A judge is a relative measure: compare versions under the same judge, and read its reasons before
+  trusting a drop. Also: a deterministic check failed on "couldn’t" (U+2019), so normalise typography in text checks.
 - **2026-10-02: validating the LLM judge.** The surprise was on the human side: on a first pass I missed all 3 replies
   with a swapped merchant name, and one invented "24-hour guarantee". The judge caught them. After adjudication we
   agreed on all 15 defects. The judge's own failures were systematic: (1) false alarms when it lacked context (it called

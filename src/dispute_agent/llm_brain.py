@@ -63,11 +63,11 @@ DECIDE = (
 )
 
 DRAFT = (
-    "Write a short, plain-English reply to the customer (under 120 words) communicating this decision. "
-    "Mention the refund amount exactly as given if the decision is refund, list what is needed if request_info, "
-    "and end with '(Policy reference: <clause ids>)'. Do not promise anything the decision does not say.\n\n"
-    "Decision: {decision}\nRefund amount (EUR): {amount:.2f}\nMissing evidence: {missing}\nRationale: {rationale}\n"
-    "Cited clauses: {cites}\n{fix}\nComplaint:\n{narrative}"
+    "Write a short, plain-English, polite reply to the customer (under 120 words) communicating this decision. "
+    "End with '(Policy reference: <clause ids>)'. Do not promise anything the decision does not say.\n\n"
+    "Decision: {decision}\nMissing evidence: {missing}\nRationale: {rationale}\nCited clauses: {cites}\n"
+    "Computed facts (use these exact values; do not calculate anything yourself): {facts}\n"
+    "This reply must:\n- {guidance}\n{fix}\nComplaint:\n{narrative}"
 )
 
 
@@ -109,9 +109,12 @@ class PromptBrain:
         return self._parse(prompt, DecisionProposal, "decide")
 
     def draft_response(self, state: CaseState) -> str:
+        from .replies import reply_facts, reply_guidance
+
         prompt = DRAFT.format(
             decision=state.decision.value,
-            amount=state.refund_amount,
+            facts=json.dumps(reply_facts(state)),
+            guidance="\n- ".join(reply_guidance(state)),
             missing=state.missing_evidence or "none",
             rationale=state.rationale,
             cites=", ".join(state.cited_clauses),

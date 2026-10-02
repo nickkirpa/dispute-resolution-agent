@@ -59,12 +59,13 @@ TYPE_PATTERNS: list[tuple[DisputeType, str]] = [
 DECISION_TEXT = {
     Decision.REFUND: "We have issued a provisional credit of {amount:.2f} EUR while we finalise the dispute.",
     Decision.REQUEST_INFO: "To continue, we need a bit more information from you: {missing}.",
-    Decision.REJECT: "After reviewing your account, we are unable to accept this dispute.",
-    Decision.ESCALATE: "Your case has been passed to a dispute specialist, who will contact you within 2 business days.",
+    Decision.REJECT: "We're sorry for the trouble, but after reviewing your account we are unable to accept this dispute.",
+    Decision.ESCALATE: "Your case has been passed to a dispute officer, who will review it and contact you with the outcome.",
 }
 
 MISSING_TEXT = {
-    "transaction_identification": "the transaction date, merchant name and amount",
+    "transaction_identification": "we could not find a charge matching your description on your account, so please send "
+                                  "the exact transaction date or a screenshot of the statement line",
     "merchant_contact": "confirmation that you contacted the merchant (and their reply, if any)",
     "expected_amount": "the amount you agreed to pay",
 }
@@ -147,5 +148,11 @@ class RuleBrain:
     def draft_response(self, state: CaseState) -> str:
         missing = ", ".join(MISSING_TEXT.get(m, m) for m in state.missing_evidence) or "details of the transaction"
         body = DECISION_TEXT[state.decision].format(amount=state.refund_amount, missing=missing)
+        if state.decision == Decision.REJECT:
+            from .replies import REJECT_NEXT_STEP
+
+            step = next((REJECT_NEXT_STEP[c] for c in state.cited_clauses if c in REJECT_NEXT_STEP), None)
+            if step:
+                body += f" Next step: {step[0].upper()}{step[1:]}."
         cites = ", ".join(state.cited_clauses)
         return f"Hello,\n\nThank you for contacting Northwind Bank about your dispute. {body}\n\n(Policy reference: {cites})\n\nKind regards,\nNorthwind Disputes Team"

@@ -82,6 +82,9 @@ policy rule (repeat fraud claims) that had no code guard, which is now fixed.
 The judge is a good screen for objective errors (wrong amount or merchant, contradictions, invented promises) but weak
 on tone (kappa ≤ 0.24) and arithmetic. v2 was adjusted on the same 40 replies, so treat its numbers as optimistic.
 
+Used as a before/after metric for a reply-writer fix (code-computed facts and decision-specific guidance), the judge's
+"OK to send" rate on the same 203 cases went from 72% to 76%, and request_info factual accuracy from 0.71 to 0.92.
+
 ### Policy update without code change (policy-change set: 40 human-reviewed boundary cases)
 
 Policy v2 shortens the filing window (120 → 90 days) and lowers the human-review threshold (500 → 300 EUR). The rule
