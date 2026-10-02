@@ -1,6 +1,6 @@
 """Streamlit demo of the Dispute Resolution Agent.
 
-    uv sync --extra app          (add --extra router for the fine-tuned router)
+    uv sync                      (add --extra router for the fine-tuned router)
     uv run streamlit run app/main.py
 """
 

@@ -143,7 +143,7 @@ accuracy of request-for-info replies 0.71 → 0.92.
 ## Try it
 
 ```bash
-uv sync --extra app                  # add --extra router for the fine-tuned router (PyTorch)
+uv sync                              # add --extra router for the fine-tuned router (PyTorch)
 uv run streamlit run app/main.py     # demo: works offline (rule brain) and plays recorded LLM runs without a key
 uv run pytest                        # 54 tests
 uv run python eval/run_eval.py --brain rules --golden eval/golden_v1.jsonl

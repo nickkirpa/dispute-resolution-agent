@@ -553,22 +553,20 @@ name = "dispute-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "altair" },
     { name = "anthropic" },
     { name = "duckdb" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-sqlite" },
     { name = "openai" },
+    { name = "pandas" },
     { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "rank-bm25" },
+    { name = "streamlit" },
 ]
 
 [package.optional-dependencies]
-app = [
-    { name = "altair" },
-    { name = "pandas" },
-    { name = "streamlit" },
-]
 router = [
     { name = "accelerate" },
     { name = "datasets" },
@@ -585,23 +583,23 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", marker = "extra == 'router'", specifier = ">=1.1" },
-    { name = "altair", marker = "extra == 'app'", specifier = ">=5.4" },
+    { name = "altair", specifier = ">=5.4" },
     { name = "anthropic", specifier = ">=1.0" },
     { name = "datasets", marker = "extra == 'router'", specifier = ">=3.0" },
     { name = "duckdb", specifier = ">=1.1" },
     { name = "langgraph", specifier = ">=0.6" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=3.1.1" },
     { name = "openai", specifier = ">=3.22.1" },
-    { name = "pandas", marker = "extra == 'app'", specifier = ">=2.2" },
+    { name = "pandas", specifier = ">=2.2" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "rank-bm25", specifier = ">=0.2.2" },
     { name = "scikit-learn", marker = "extra == 'router'", specifier = ">=1.5" },
-    { name = "streamlit", marker = "extra == 'app'", specifier = ">=1.40" },
+    { name = "streamlit", specifier = ">=1.40" },
     { name = "torch", marker = "extra == 'router'", specifier = ">=2.4" },
     { name = "transformers", marker = "extra == 'router'", specifier = ">=4.48" },
 ]
-provides-extras = ["router", "app"]
+provides-extras = ["router"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8" }]

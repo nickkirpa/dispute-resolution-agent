@@ -13,13 +13,15 @@ dependencies = [
     "pydantic>=2.7",
     "python-dotenv>=1.0",
     "rank-bm25>=0.2.2",
+    # demo app (core deps on purpose: hosting platforms may install from pyproject/uv.lock without extras)
+    "streamlit>=1.40",
+    "pandas>=2.2",
+    "altair>=5.4",
 ]
 
 [project.optional-dependencies]
 # Days 8-9: fine-tuned transformer router
 router = ["torch>=2.4", "transformers>=4.48", "accelerate>=1.1", "datasets>=3.0", "scikit-learn>=1.5"]
-# Days 13-14: Streamlit demo app
-app = ["streamlit>=1.40", "pandas>=2.2", "altair>=5.4"]
 
 [dependency-groups]
 dev = ["pytest>=8"]
