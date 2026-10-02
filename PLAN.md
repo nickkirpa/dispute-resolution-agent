@@ -128,8 +128,21 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
 
 ### Days 13–14: presentation
 - [ ] README: architecture diagram, results table, design decisions ("why a state machine and not a ReAct loop")
-- [ ] A short demo GIF of the CLI, including the human-review interrupt and resume
-- [ ] Resume bullet: **use only measured numbers**
+- [ ] **Streamlit demo app** (`app/`, `uv run streamlit run app/main.py`), reusing the agent code directly:
+  - [ ] **Customer view:** pick a demo customer, see their transactions, type a complaint, watch the agent work step by step
+        (live node / tool-call progress), see the decision and the drafted reply
+  - [ ] **Dispute officer view:** queue of cases waiting for human review (from the SQLite checkpoints); open a case to see
+        evidence, cited clauses, proposed decision and guard reasons; approve / reject / ask the customer, then the case resumes
+  - [ ] **Agent trace panel:** every tool call with its reason, observation, cost and latency; coverage fills and dropped citations
+  - [ ] **Policy switch:** run the same complaint under v1 and v2 side by side (shows the living KB)
+  - [ ] **Metrics page:** eval results (accuracy, unsafe refunds, cost/latency, plan vs agent, policy change) from `eval/results`
+  - [ ] Settings in the sidebar: brain (rules / LLM), evidence mode (plan / agent), policy version, retrieval mode
+  - [ ] **Public hosting** (Streamlit Community Cloud or Hugging Face Spaces). **No employer API key in the hosted app.** Use the
+        rule brain plus **recorded replays** of real agent runs (saved traces played back step by step, $0, no key), or a
+        personal key with a hard spend limit and rate limiting. Decide before hosting
+  - [ ] Tests for the app's non-UI logic (replay loading, queue listing); the demo must work offline with the rule brain
+- [ ] A short demo GIF of the **Streamlit app** (customer complaint → human review → resume), embedded in the README
+- [ ] Resume bullet: **use only measured numbers**; add the live demo link once hosted
 
 ## Findings log
 Write down what broke and what fixed it. This is README and interview material.
