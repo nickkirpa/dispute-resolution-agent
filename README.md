@@ -69,6 +69,18 @@ values live in the policy documents (`Parameters:` lines), so the same code appl
 | policy v1 | 40/40 | – |
 | policy v2 | 40/40 | **32/32 expected flips** (16 refund → reject, 16 refund → escalate); 8 controls unchanged |
 
+### Fine-tuned router (ModernBERT-base, trained locally on an Apple M5 Pro in 9 minutes)
+
+| | ModernBERT router | Zero-shot LLM (gpt-5.4-mini) |
+|---|---|---|
+| Banking77 test, 77 intents | **93.2% acc / 0.932 macro-F1** | – |
+| Dispute type (6 classes) | **98.9% / 0.969** | 90.7% / 0.757 (much of the gap is label-convention disagreement) |
+| Latency / message | **9 ms** | 1.2 s |
+| Cost / 1k messages | ~$0 (local) | $0.31 |
+
+In the agent, the router classifies first and the LLM is called only below 0.9 confidence: on golden_v1 the router
+decided 52% of classifications with type accuracy unchanged at 100%, and per-case latency fell from 5.4 to 4.4 s.
+
 ### Policy retrieval (156 queries, policy v2 with 37 clauses)
 
 | Candidates | BM25 recall@3 | Dense recall@3 | Hybrid (RRF) recall@3 | Hybrid MRR |

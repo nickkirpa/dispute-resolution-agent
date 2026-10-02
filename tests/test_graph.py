@@ -221,3 +221,33 @@ def test_usage_accumulates_across_restart(tmp_path):
                            narrative="I don't recognise a 899.00 EUR charge from LuxWatch on 2026-09-15."), config=config)
     final = app().invoke(Command(resume={"decision": "refund", "refund_amount": 899.0}), config=config)  # new process
     assert final["usage"].llm_calls == 4  # extract + classify + decide (process 1) + draft (process 2)
+
+
+def test_confident_router_skips_llm_classify_and_unsure_router_falls_back(monkeypatch):
+    """Router stub: confident on duplicates, unsure otherwise. No torch needed."""
+    from dispute_agent import router as router_mod
+    from dispute_agent.state import DisputeType
+
+    class StubRouter:
+        def predict(self, text):
+            return (DisputeType.DUPLICATE_CHARGE, 0.97, "transaction_charged_twice") if "twice" in text else (DisputeType.OTHER, 0.4, "x")
+
+    monkeypatch.setattr(router_mod, "load_router", lambda path: StubRouter())
+    led = build_fixture_ledger()
+    calls = []
+
+    class CountingBrain(RuleBrain):
+        def classify(self, narrative, claim):
+            calls.append(narrative)
+            return super().classify(narrative, claim)
+
+    deps = Deps(brain=CountingBrain(led.merchants()), ledger=led, kb=KnowledgeBase(Settings().kb_dir, "v1"),
+                settings=Settings(router_path="stub", kb_version="v1"))
+    app = build_graph(deps)
+    a = run_case(app, CaseState(case_id="r1", customer_id="C001", as_of="2026-09-30",
+                 narrative="I was charged twice by SpotiTunes for 9.99 EUR on 2026-09-02."))
+    b = run_case(app, CaseState(case_id="r2", customer_id="C005", as_of="2026-09-30",
+                 narrative="There is a payment of 120.00 EUR to CryptoMart on 2026-09-20 that I don't recognise."))
+    assert a["classified_by"] == "router" and a["decision"] == Decision.REFUND
+    assert b["classified_by"] == "rules" and b["router_prediction"]["confidence"] == 0.4
+    assert len(calls) == 1  # only the unsure case reached the brain's classify

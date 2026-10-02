@@ -125,11 +125,21 @@ def build_graph(deps: Deps, checkpointer=None):
         return _step("intake", state, claim=claim)
 
     def classify(state: CaseState) -> dict:
+        routed = {}
+        if s.router_path:
+            from .router import load_router
+
+            dtype, conf, intent = load_router(s.router_path).predict(state.narrative)
+            routed = {"type": dtype.value, "confidence": round(conf, 4), "intent": intent}
+            if conf >= s.router_threshold:  # confident: skip the LLM classification call
+                return _step("classify", state, dispute_type=dtype, type_confidence=conf, classified_by="router",
+                             router_prediction=routed)
         try:
             c = deps.brain.classify(state.narrative, state.claim)
         except LLMRefusal as e:
             return _escalate("classify", state, f"model refusal: {e}", deps)
-        return _step("classify", state, dispute_type=c.dispute_type, type_confidence=c.confidence)
+        return _step("classify", state, dispute_type=c.dispute_type, type_confidence=c.confidence,
+                     classified_by="rules" if deps.brain.name == "rules" else "llm", router_prediction=routed)
 
     def gather_evidence(state: CaseState) -> dict:
         """Plan mode: scripted tool calls. Agent mode: LLM-chosen tool calls under a budget, falling back to the plan

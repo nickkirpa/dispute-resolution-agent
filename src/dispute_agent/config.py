@@ -35,6 +35,9 @@ class Settings(BaseModel):
     kb_version: str = "latest"
     retrieval_mode: str = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_RETRIEVAL", "bm25"))  # bm25 | dense | hybrid
     evidence_mode: str = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_EVIDENCE", "plan"))  # plan | agent
+    # fine-tuned router (models/router): used first; LLM classifies only below the confidence threshold
+    router_path: str | None = Field(default_factory=lambda: os.getenv("DISPUTE_AGENT_ROUTER"))
+    router_threshold: float = 0.9
     coverage_fill: bool = True  # agent mode: code runs policy-critical checks the agent skipped (False = ablation)
     max_tool_calls: int = 6  # agent-mode budget per case (invalid and refused calls count too)
     max_steps: int = 12  # hard step budget for one case

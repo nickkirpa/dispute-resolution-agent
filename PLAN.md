@@ -114,10 +114,19 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
       `run_config` (a case keeps its policy version on resume)
 
 ### Days 8–9: deep-learning router
-- [ ] Fine-tune ModernBERT or DeBERTa-v3 (PyTorch + HF) on Banking77→DisputeType (plus the synthetic not_received set).
-      Report macro-F1 on the official Banking77 test split; the classes are imbalanced, so accuracy alone is not enough
-- [ ] Compare against zero-shot LLM classification on accuracy, macro-F1, latency and cost per 1k cases
-- [ ] Use the router in `classify`, with the LLM as fallback when router confidence is below a threshold
+- [x] Fine-tuned **ModernBERT-base** (PyTorch + HF Trainer, Apple M5 Pro GPU via MPS, 9.1 min, 4 epochs) on 77 Banking77
+      intents + synthetic not_received (`scripts/train_router.py`; best epoch by validation macro-F1). Official test split:
+      **intent acc 93.2%, macro-F1 0.932** (in line with published Banking77 results); dispute type acc 98.9%, macro-F1 0.969.
+      Synthetic class reported separately (97.8% acc, n=45; it is LLM-written, so an easier distribution)
+- [x] Zero-shot LLM on the same test split (`eval/run_router_baseline.py`): dispute type acc 90.7%, macro-F1 0.757,
+      1.2 s/msg, $0.31 per 1k. Router: 98.9% / 0.969, 9 ms/msg, ~$0. **Caveat:** most of the gap is label-convention
+      disagreement (e.g. "lost or stolen card" is `other` in my mapping; the LLM says `unauthorized`), because the router
+      learned my mapping from data and the LLM never saw it. Fairer: report it as "reproduces the labelling scheme"
+- [x] Router in `classify` (`router.py`, `--router models/router`, threshold 0.9; LLM fallback below it). On the golden
+      complaints (domain shift: long, multi-sentence) the router alone is 96.7%, but at confidence ≥ 0.9 it was right 100% of
+      the time on 54% of cases. End to end on golden_v1 (plan mode): router decides 52% of classifications, type accuracy
+      stays 100%, LLM calls 4.01 → 3.49/case, cost −7%, latency 5.4 → 4.4 s. The 2 decision misses were known flaky cases
+      at the decide step, not routing errors
 
 ### Days 10–12: evaluation and comparisons
 - [ ] Metrics: decision accuracy, citation recall, tool calls per case, cost and latency per case, escalation rate
@@ -158,6 +167,14 @@ Write down what broke and what fixed it. This is README and interview material.
   the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
   didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
   On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-02: router, honest framing.** The fine-tuned model is excellent at what it was trained for (93.2% on
+  Banking77) and fast (9 ms vs 1.2 s), but (1) a large part of its lead over the LLM is my own label conventions, and
+  (2) on longer, unfamiliar complaints it drops to 96.7%. Calibrated confidence makes it useful anyway: a 0.9 threshold
+  keeps only the cases it gets right. Savings are modest (−13% LLM calls), because classification is 1 of ~4 calls.
+  The bigger lever would be routing the extraction step, or letting the router skip the LLM entirely on simple cases.
+- **2026-10-02: Metal (MPS) and threads.** 8 eval threads using the router crashed the process inside Apple's GPU
+  driver (`MTLCommandBuffer` assertion), even with a lock around inference. Fix: one dedicated GPU thread owns all
+  model loading and inference; other threads submit requests to it.
 - **2026-10-02: policy update without code change.** Moving thresholds into the policy documents was the prerequisite:
   before that, publishing "90 days" in the text would have changed nothing, because code still checked 120. After it,
   the agent applied v2 on the policy-change set with 40/40 correct and 32/32 expected flips. The LLM read the new

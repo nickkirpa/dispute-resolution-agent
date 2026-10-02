@@ -90,6 +90,8 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
         "self_check_errors": out.get("self_check_errors", []),
         "draft_attempts": out.get("draft_attempts", 0),
         "dropped_citations": out.get("dropped_citations", []),
+        "classified_by": out.get("classified_by", ""),
+        "router_prediction": out.get("router_prediction", {}),
         "response_draft": out.get("response_draft", ""),
         "steps": out.get("steps", 0),
         "llm_calls": usage.llm_calls,
@@ -102,7 +104,7 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
 
 def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: Path = ROOT / "eval" / "golden.jsonl",
              workers: int = 1, evidence: str | None = None, no_fill: bool = False, kb_version: str | None = None,
-             effort: str | None = None, retrieval: str | None = None) -> dict:
+             effort: str | None = None, retrieval: str | None = None, router: str | None = None) -> dict:
     golden_rows = load_golden(golden_path)
     # labels are only valid for the policy version they were made under; default v1 (seed + golden_v1)
     pinned = kb_version or golden_rows[0].get("policy_version", "v1")
@@ -111,6 +113,8 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
         overrides["coverage_fill"] = False
     if retrieval:
         overrides["retrieval_mode"] = retrieval
+    if router:
+        overrides["router_path"] = router
     if effort:
         from dispute_agent.config import _parse_effort
 
@@ -129,6 +133,7 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
         "brain": (brain_kind if brain_kind == "rules" else f"llm:{settings.model}") + f"+{settings.evidence_mode}"
                  + ("" if settings.coverage_fill else "-nofill")
                  + ("" if settings.retrieval_mode == "bm25" else f"+{settings.retrieval_mode}")
+                 + (f"+router{settings.router_threshold}" if settings.router_path else "")
                  + ("+" + "-".join(f"{k}.{v}" for k, v in sorted(settings.effort_by_step.items())) if settings.effort_by_step else ""),
         "golden": golden_path.name,
         "kb_version": kb.version,
@@ -143,6 +148,8 @@ def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: P
         "self_check_failure_rate": sum(bool(r["self_check_errors"]) for r in rows) / n,  # still failing after retries
         "redraft_rate": sum(r["draft_attempts"] > 1 for r in rows) / n,  # first draft failed the self-check
         "dropped_citation_rate": sum(bool(r["dropped_citations"]) for r in rows) / n,  # model cited an inapplicable clause
+        "router_share": sum(r["classified_by"] == "router" for r in rows) / n,  # classification done without an LLM call
+        "avg_llm_calls": sum(r["llm_calls"] for r in rows) / n,
         "crash_rate": sum(bool(r["error"]) for r in rows) / n,
         "avg_steps": sum(r["steps"] for r in rows) / n,
         "evidence_mode": settings.evidence_mode,
@@ -191,10 +198,11 @@ def main() -> None:
     ap.add_argument("--kb-version", default=None, help="policy version (default: the golden set's policy_version, else v1)")
     ap.add_argument("--effort", default=None, help='per-step reasoning effort, e.g. "decide=medium,action=medium"')
     ap.add_argument("--retrieval", choices=["bm25", "dense", "hybrid"], default=None, help="policy search mode")
+    ap.add_argument("--router", default=None, help="path to a fine-tuned router (e.g. models/router)")
     args = ap.parse_args()
 
     if args.repeats > 1:
-        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval) for _ in range(args.repeats)]
+        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval, args.router) for _ in range(args.repeats)]
         agg = aggregate(reports) | {"brain": reports[0]["summary"]["brain"], "golden": args.golden.name}
         out_dir = ROOT / "eval" / "results"
         out_dir.mkdir(exist_ok=True)
@@ -208,7 +216,7 @@ def main() -> None:
         print(f"\nReport: {out.relative_to(ROOT)}")
         return
 
-    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval)
+    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval, args.router)
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
     out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{re.sub(r'[^A-Za-z0-9.-]+', '_', report['summary']['brain'])}.json"

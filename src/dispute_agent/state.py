@@ -91,6 +91,8 @@ class CaseState(BaseModel):
     claim: Claim | None = None
     dispute_type: DisputeType | None = None
     type_confidence: float = 0.0
+    classified_by: str = ""  # router | llm | rules (which component set dispute_type)
+    router_prediction: dict = Field(default_factory=dict)  # type, confidence, intent; kept even when the LLM decided
 
     # evidence & policy (evidence uses an additive reducer so nodes can append)
     evidence: Annotated[list[Evidence], operator.add] = Field(default_factory=list)
