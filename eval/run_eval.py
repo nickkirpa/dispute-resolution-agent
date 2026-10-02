@@ -104,8 +104,13 @@ def run_one(g: dict, brain_kind: str, settings: Settings, ledger: Ledger, kb: Kn
 
 def evaluate(brain_kind: str = "rules", model: str | None = None, golden_path: Path = ROOT / "eval" / "golden.jsonl",
              workers: int = 1, evidence: str | None = None, no_fill: bool = False, kb_version: str | None = None,
-             effort: str | None = None, retrieval: str | None = None, router: str | None = None) -> dict:
+             effort: str | None = None, retrieval: str | None = None, router: str | None = None,
+             per_scenario: int | None = None) -> dict:
     golden_rows = load_golden(golden_path)
+    if per_scenario:  # deterministic sample: the first N cases of each scenario (cheap cost/quality probes)
+        seen: dict[str, int] = {}
+        golden_rows = [g for g in golden_rows if (seen.__setitem__(g.get("scenario"), seen.get(g.get("scenario"), 0) + 1)
+                                                  or seen[g.get("scenario")] <= per_scenario)]
     # labels are only valid for the policy version they were made under; default v1 (seed + golden_v1)
     pinned = kb_version or golden_rows[0].get("policy_version", "v1")
     overrides = {k: v for k, v in {"model": model, "evidence_mode": evidence, "kb_version": pinned}.items() if v}
@@ -199,12 +204,13 @@ def main() -> None:
     ap.add_argument("--effort", default=None, help='per-step reasoning effort, e.g. "decide=medium,action=medium"')
     ap.add_argument("--retrieval", choices=["bm25", "dense", "hybrid"], default=None, help="policy search mode")
     ap.add_argument("--router", default=None, help="path to a fine-tuned router (e.g. models/router)")
+    ap.add_argument("--per-scenario", type=int, default=None, help="only the first N cases of each scenario (cheap probe)")
     ap.add_argument("--min-accuracy", type=float, default=None, help="quality gate: exit 1 if decision accuracy is below this")
     ap.add_argument("--max-unsafe", type=float, default=None, help="quality gate: exit 1 if unsafe refund rate is above this")
     args = ap.parse_args()
 
     if args.repeats > 1:
-        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval, args.router) for _ in range(args.repeats)]
+        reports = [evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval, args.router, args.per_scenario) for _ in range(args.repeats)]
         agg = aggregate(reports) | {"brain": reports[0]["summary"]["brain"], "golden": args.golden.name}
         out_dir = ROOT / "eval" / "results"
         out_dir.mkdir(exist_ok=True)
@@ -218,7 +224,7 @@ def main() -> None:
         print(f"\nReport: {out.relative_to(ROOT)}")
         return
 
-    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval, args.router)
+    report = evaluate(args.brain, args.model, args.golden, args.workers, args.evidence, args.no_fill, args.kb_version, args.effort, args.retrieval, args.router, args.per_scenario)
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(exist_ok=True)
     out = out_dir / f"{datetime.now():%Y%m%d-%H%M%S}-{re.sub(r'[^A-Za-z0-9.-]+', '_', report['summary']['brain'])}.json"

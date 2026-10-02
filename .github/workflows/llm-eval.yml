@@ -17,7 +17,7 @@ on:
 
 jobs:
   eval:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DISPUTE_AGENT_PROVIDER: openai
       DISPUTE_AGENT_MODEL: ${{ vars.DISPUTE_AGENT_MODEL || 'gpt-5.4-mini' }}
@@ -25,7 +25,7 @@ jobs:
       OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.11"
       - run: uv sync
@@ -33,7 +33,7 @@ jobs:
         run: >
           uv run python eval/run_eval.py --brain llm --evidence ${{ inputs.evidence }} --golden ${{ inputs.golden }}
           --workers 8 --min-accuracy 0.97 --max-unsafe 0
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: eval-report
