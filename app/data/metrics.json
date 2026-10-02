@@ -1,0 +1,194 @@
+{
+ "configs": [
+  {
+   "config": "Rule baseline (regex)",
+   "decision_accuracy": 0.8423645320197044,
+   "runs": 1,
+   "unsafe_refund_rate": 0.0,
+   "cost_per_case_usd": 0.0,
+   "latency_s": 0.003,
+   "note": "",
+   "source": "20261002-161253-rules_plan.json"
+  },
+  {
+   "config": "gpt-5.4-nano \u00b7 plan",
+   "decision_accuracy": 0.8719211822660099,
+   "runs": 1,
+   "unsafe_refund_rate": 0.0,
+   "cost_per_case_usd": 0.0007660098522167488,
+   "latency_s": 5.441,
+   "note": "after the POL-UNA-02 guard fix",
+   "source": "20261002-150154-llm_openai_gpt-5.4-nano_plan.json"
+  },
+  {
+   "config": "gpt-5.4-mini \u00b7 plan",
+   "decision_accuracy": 1.0,
+   "runs": 3,
+   "unsafe_refund_rate": 0.0,
+   "cost_per_case_usd": 0.00262,
+   "latency_s": 4.07767,
+   "note": "",
+   "source": "20261002-144915-llm_openai_gpt-5.4-mini_plan-x3.json"
+  },
+  {
+   "config": "gpt-5.4-mini \u00b7 plan + router",
+   "decision_accuracy": 1.0,
+   "runs": 3,
+   "unsafe_refund_rate": 0.0,
+   "cost_per_case_usd": 0.00243,
+   "latency_s": 3.82033,
+   "note": "",
+   "source": "20261002-145414-llm_openai_gpt-5.4-mini_plan_router0.9-x3.json"
+  },
+  {
+   "config": "gpt-5.4-mini \u00b7 agent",
+   "decision_accuracy": 1.0,
+   "runs": 1,
+   "unsafe_refund_rate": 0.0,
+   "cost_per_case_usd": 0.007377832512315271,
+   "latency_s": 12.899,
+   "note": "",
+   "source": "20261002-003310-llm_openai_gpt-5.4-mini_agent.json"
+  },
+  {
+   "config": "gpt-5.4-mini \u00b7 agent + hybrid",
+   "decision_accuracy": 1.0,
+   "runs": 1,
+   "unsafe_refund_rate": 0.0,
+   "cost_per_case_usd": 0.007348275862068965,
+   "latency_s": 10.294,
+   "note": "",
+   "source": "20261002-145842-llm_openai_gpt-5.4-mini_agent_hybrid.json"
+  },
+  {
+   "config": "gpt-5.5 \u00b7 plan",
+   "decision_accuracy": 1.0,
+   "runs": 1,
+   "unsafe_refund_rate": 0.0,
+   "cost_per_case_usd": 0.022663054187192118,
+   "latency_s": 8.474,
+   "note": "",
+   "source": "20261002-144356-llm_openai_gpt-5.5_plan.json"
+  }
+ ],
+ "failure_taxonomy": [
+  {
+   "cause": "crash",
+   "count": 0
+  },
+  {
+   "cause": "unsafe_refund",
+   "count": 0
+  },
+  {
+   "cause": "wrong_type",
+   "count": 0
+  },
+  {
+   "cause": "wrong_refund_amount",
+   "count": 0
+  },
+  {
+   "cause": "guard_escalation",
+   "count": 3
+  },
+  {
+   "cause": "model_over_escalation",
+   "count": 19
+  },
+  {
+   "cause": "missed_escalation",
+   "count": 0
+  },
+  {
+   "cause": "evidence_not_found",
+   "count": 0
+  },
+  {
+   "cause": "wrong_policy_outcome",
+   "count": 1
+  }
+ ],
+ "failure_taxonomy_scope": "gpt-5.4-mini single runs on golden_v1 + policy-change sets",
+ "policy_change": {
+  "n": 40,
+  "v1_correct": 40,
+  "v2_correct": 40,
+  "decisions_changed": 32,
+  "source": [
+   "20261002-010327-llm_openai_gpt-5.4-mini_agent.json",
+   "20261002-010418-llm_openai_gpt-5.4-mini_agent.json"
+  ]
+ },
+ "router": {
+  "router": {
+   "intent_accuracy": 0.9321428571428572,
+   "type_accuracy": 0.98944,
+   "type_macro_f1": 0.968584808995943,
+   "latency_ms": 9.19,
+   "train_minutes": 9.05
+  },
+  "llm": {
+   "type_accuracy": 0.90688,
+   "type_macro_f1": 0.7567460639711064,
+   "latency_ms": 1209.0,
+   "cost_per_1k_usd": 0.3065
+  }
+ },
+ "judge": {
+  "v1": {
+   "facts": 0.468,
+   "decision": 0.63,
+   "promises": 0.634,
+   "clarity": 0.127,
+   "send": 0.653,
+   "send_agreement": 0.825
+  },
+  "v2": {
+   "facts": 0.677,
+   "decision": 0.5,
+   "promises": 0.634,
+   "clarity": 0.244,
+   "send": 0.694,
+   "send_agreement": 0.85
+  }
+ },
+ "retrieval": {
+  "filtered/bm25": {
+   "recall@1": 0.6602564102564102,
+   "recall@3": 1.0,
+   "recall@5": 1.0,
+   "mrr": 0.8301282051282052
+  },
+  "filtered/dense": {
+   "recall@1": 0.6346153846153846,
+   "recall@3": 1.0,
+   "recall@5": 1.0,
+   "mrr": 0.8173076923076923
+  },
+  "filtered/hybrid": {
+   "recall@1": 0.6602564102564102,
+   "recall@3": 1.0,
+   "recall@5": 1.0,
+   "mrr": 0.8301282051282052
+  },
+  "unfiltered/bm25": {
+   "recall@1": 0.3974358974358974,
+   "recall@3": 0.6602564102564102,
+   "recall@5": 0.7564102564102564,
+   "mrr": 0.5435719373219374
+  },
+  "unfiltered/dense": {
+   "recall@1": 0.41025641025641024,
+   "recall@3": 0.7884615384615384,
+   "recall@5": 0.9102564102564102,
+   "mrr": 0.6203729141229143
+  },
+  "unfiltered/hybrid": {
+   "recall@1": 0.46153846153846156,
+   "recall@3": 0.7948717948717948,
+   "recall@5": 0.8653846153846154,
+   "mrr": 0.6394027269027271
+  }
+ }
+}

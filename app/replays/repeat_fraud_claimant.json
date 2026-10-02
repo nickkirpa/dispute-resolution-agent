@@ -1,0 +1,683 @@
+{
+ "title": "Repeat fraud claimant",
+ "description": "Third unauthorized claim in 12 months: the POL-UNA-02 guard sends it to the fraud team.",
+ "events": [
+  {
+   "type": "start",
+   "case_id": "case-a56b69be",
+   "config": {
+    "brain": "llm",
+    "evidence_mode": "agent",
+    "kb_version": "v2",
+    "retrieval_mode": "bm25",
+    "router_path": null,
+    "provider": "openai",
+    "model": "openai/gpt-5.4-mini"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "intake",
+   "label": "Reading the complaint",
+   "update": {
+    "steps": 1,
+    "trace": [
+     "intake"
+    ],
+    "claim": {
+     "merchant": "PizzaNow",
+     "amount": 34.5,
+     "currency": "EUR",
+     "transaction_date": "2026-09-25",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "usage": {
+     "llm_calls": 1,
+     "input_tokens": 363,
+     "output_tokens": 51,
+     "cost_usd": 0.0005017499999999987
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "classify",
+   "label": "Classifying the dispute",
+   "update": {
+    "steps": 2,
+    "trace": [
+     "classify"
+    ],
+    "dispute_type": "unauthorized",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "usage": {
+     "llm_calls": 2,
+     "input_tokens": 673,
+     "output_tokens": 71,
+     "cost_usd": 0.0008242499999999986
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "gather_evidence",
+   "label": "Investigating the account",
+   "update": {
+    "steps": 3,
+    "trace": [
+     "gather_evidence"
+    ],
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 34.5 EUR at PizzaNow on: 2026-09-25",
+      "data": {
+       "txn_id": "T060",
+       "customer_id": "C007",
+       "merchant": "PizzaNow",
+       "amount": 34.5,
+       "currency": "EUR",
+       "txn_date": "2026-09-25",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-09-25"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "5 days since transaction",
+      "data": {
+       "days_since_transaction": 5
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 2, 'unauthorized_disputes_last_12m': 2}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 2,
+       "unauthorized_disputes_last_12m": 2
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-UNA-02",
+      "version": "v2",
+      "title": "Repeated unauthorized claims",
+      "text": "If the customer has raised two or more unauthorized-transaction disputes in the last 12 months, the case is escalated to the fraud team instead of being refunded automatically.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.55050523814802
+     },
+     {
+      "clause_id": "POL-UNA-01",
+      "version": "v2",
+      "title": "Unauthorized transactions",
+      "text": "If the customer reports a transaction they did not make or authorize, the transaction amount is refunded as a provisional credit, the card is blocked and a replacement is issued.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.077079078519031
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "PizzaNow",
+       "amount": 34.5,
+       "date": "2026-09-25",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "I need to verify whether the charge exists, whether there are duplicates or refunds, and what policy requires for unauthorized disputes before finishing.",
+      "ok": true,
+      "observation": "1 charge(s): T060: 34.50 EUR PizzaNow on 2026-09-25 (online)"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "unauthorized dispute policy evidence needed charge present match criteria duplicate charge refunds customer history"
+      },
+      "reason": "I need policy criteria for unauthorized disputes before deciding whether the single matched charge is sufficient evidence.",
+      "ok": true,
+      "observation": "POL-UNA-02: Repeated unauthorized claims; POL-UNA-01: Unauthorized transactions"
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "PizzaNow",
+       "amount": 34.5,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Check whether this exact charge appears more than once, since duplicates can affect unauthorized dispute handling.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "PizzaNow",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the charge, policy, and duplicate check; next I need refund evidence before deciding.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We still need account history to assess any repeated unauthorized-claim policy context before finishing.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 2, 'unauthorized_disputes_last_12m': 2}"
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "The key evidence is already gathered, so I will finish with the dispute summary.",
+      "ok": true,
+      "observation": "finished"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "usage": {
+     "llm_calls": 8,
+     "input_tokens": 4895,
+     "output_tokens": 463,
+     "cost_usd": 0.0057547499999999994
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "policy_check",
+   "label": "Checking required evidence",
+   "update": {
+    "steps": 4,
+    "trace": [
+     "policy_check"
+    ],
+    "missing_evidence": []
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "decide",
+   "label": "Deciding under policy",
+   "update": {
+    "steps": 5,
+    "trace": [
+     "decide"
+    ],
+    "decision": "escalate",
+    "decision_confidence": 0.97,
+    "refund_amount": 0.0,
+    "rationale": "There is a matching transaction within the filing window, so the dispute is identifiable and timely. However, the customer has 2 unauthorized disputes in the last 12 months, which under POL-UNA-02 must be escalated to the fraud team instead of refunded automatically.",
+    "cited_clauses": [
+     "POL-UNA-02",
+     "POL-UNA-01"
+    ],
+    "dropped_citations": [
+     "POL-GEN-01",
+     "POL-GEN-02"
+    ],
+    "needs_human": true,
+    "human_reason": "There is a matching transaction within the filing window, so the dispute is identifiable and timely. However, the customer has 2 unauthorized disputes in the last 12 months, which under POL-UNA-02 must be escalated to the fraud team instead of refunded automatically.",
+    "usage": {
+     "llm_calls": 9,
+     "input_tokens": 5827,
+     "output_tokens": 571,
+     "cost_usd": 0.006939749999999998
+    }
+   }
+  },
+  {
+   "type": "interrupt",
+   "case_id": "case-a56b69be",
+   "payload": {
+    "case_id": "case-a56b69be",
+    "reason": "There is a matching transaction within the filing window, so the dispute is identifiable and timely. However, the customer has 2 unauthorized disputes in the last 12 months, which under POL-UNA-02 must be escalated to the fraud team instead of refunded automatically.",
+    "proposed_decision": "escalate",
+    "refund_amount": 0.0,
+    "rationale": "There is a matching transaction within the filing window, so the dispute is identifiable and timely. However, the customer has 2 unauthorized disputes in the last 12 months, which under POL-UNA-02 must be escalated to the fraud team instead of refunded automatically.",
+    "cited_clauses": [
+     "POL-UNA-02",
+     "POL-UNA-01"
+    ]
+   }
+  },
+  {
+   "type": "resume",
+   "case_id": "case-a56b69be",
+   "verdict": {
+    "decision": "escalate",
+    "note": "forwarded to the fraud team"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "human_review",
+   "label": "Human review",
+   "update": {
+    "steps": 6,
+    "trace": [
+     "human_review"
+    ],
+    "decision": "escalate",
+    "refund_amount": 0.0,
+    "rationale": "There is a matching transaction within the filing window, so the dispute is identifiable and timely. However, the customer has 2 unauthorized disputes in the last 12 months, which under POL-UNA-02 must be escalated to the fraud team instead of refunded automatically. | human: forwarded to the fraud team",
+    "needs_human": false,
+    "cited_clauses": [
+     "POL-UNA-02",
+     "POL-UNA-01"
+    ]
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "draft_response",
+   "label": "Writing the reply",
+   "update": {
+    "steps": 7,
+    "trace": [
+     "draft_response"
+    ],
+    "response_draft": "Thanks for letting us know. We found a matching transaction for PizzaNow on 25 September, so your dispute has been identified and sent to a dispute officer for review. A fraud team member will review the case and contact you with the outcome. We can\u2019t promise the result at this stage. (Policy reference: POL-UNA-02, POL-UNA-01)",
+    "draft_attempts": 1,
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6239,
+     "output_tokens": 656,
+     "cost_usd": 0.007631249999999996
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-a56b69be",
+   "node": "self_check",
+   "label": "Checking the reply",
+   "update": {
+    "steps": 8,
+    "trace": [
+     "self_check"
+    ],
+    "self_check_errors": []
+   }
+  },
+  {
+   "type": "done",
+   "case_id": "case-a56b69be",
+   "state": {
+    "case_id": "case-a56b69be",
+    "next": [],
+    "customer_id": "C007",
+    "narrative": "A charge of 34.50 EUR from PizzaNow on 25 September was not authorised by me.",
+    "as_of": "2026-09-30",
+    "run_config": {
+     "brain": "llm",
+     "evidence_mode": "agent",
+     "kb_version": "v2",
+     "retrieval_mode": "bm25",
+     "router_path": null,
+     "provider": "openai",
+     "model": "openai/gpt-5.4-mini"
+    },
+    "claim": {
+     "merchant": "PizzaNow",
+     "amount": 34.5,
+     "currency": "EUR",
+     "transaction_date": "2026-09-25",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "dispute_type": "unauthorized",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 34.5 EUR at PizzaNow on: 2026-09-25",
+      "data": {
+       "txn_id": "T060",
+       "customer_id": "C007",
+       "merchant": "PizzaNow",
+       "amount": 34.5,
+       "currency": "EUR",
+       "txn_date": "2026-09-25",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-09-25"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "5 days since transaction",
+      "data": {
+       "days_since_transaction": 5
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 2, 'unauthorized_disputes_last_12m': 2}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 2,
+       "unauthorized_disputes_last_12m": 2
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-UNA-02",
+      "version": "v2",
+      "title": "Repeated unauthorized claims",
+      "text": "If the customer has raised two or more unauthorized-transaction disputes in the last 12 months, the case is escalated to the fraud team instead of being refunded automatically.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.55050523814802
+     },
+     {
+      "clause_id": "POL-UNA-01",
+      "version": "v2",
+      "title": "Unauthorized transactions",
+      "text": "If the customer reports a transaction they did not make or authorize, the transaction amount is refunded as a provisional credit, the card is blocked and a replacement is issued.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.077079078519031
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "PizzaNow",
+       "amount": 34.5,
+       "date": "2026-09-25",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "I need to verify whether the charge exists, whether there are duplicates or refunds, and what policy requires for unauthorized disputes before finishing.",
+      "ok": true,
+      "observation": "1 charge(s): T060: 34.50 EUR PizzaNow on 2026-09-25 (online)"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "unauthorized dispute policy evidence needed charge present match criteria duplicate charge refunds customer history"
+      },
+      "reason": "I need policy criteria for unauthorized disputes before deciding whether the single matched charge is sufficient evidence.",
+      "ok": true,
+      "observation": "POL-UNA-02: Repeated unauthorized claims; POL-UNA-01: Unauthorized transactions"
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "PizzaNow",
+       "amount": 34.5,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Check whether this exact charge appears more than once, since duplicates can affect unauthorized dispute handling.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "PizzaNow",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the charge, policy, and duplicate check; next I need refund evidence before deciding.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We still need account history to assess any repeated unauthorized-claim policy context before finishing.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 2, 'unauthorized_disputes_last_12m': 2}"
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "The key evidence is already gathered, so I will finish with the dispute summary.",
+      "ok": true,
+      "observation": "finished"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "missing_evidence": [],
+    "decision": "escalate",
+    "decision_confidence": 0.97,
+    "refund_amount": 0.0,
+    "rationale": "There is a matching transaction within the filing window, so the dispute is identifiable and timely. However, the customer has 2 unauthorized disputes in the last 12 months, which under POL-UNA-02 must be escalated to the fraud team instead of refunded automatically. | human: forwarded to the fraud team",
+    "cited_clauses": [
+     "POL-UNA-02",
+     "POL-UNA-01"
+    ],
+    "dropped_citations": [
+     "POL-GEN-01",
+     "POL-GEN-02"
+    ],
+    "response_draft": "Thanks for letting us know. We found a matching transaction for PizzaNow on 25 September, so your dispute has been identified and sent to a dispute officer for review. A fraud team member will review the case and contact you with the outcome. We can\u2019t promise the result at this stage. (Policy reference: POL-UNA-02, POL-UNA-01)",
+    "needs_human": false,
+    "human_reason": "There is a matching transaction within the filing window, so the dispute is identifiable and timely. However, the customer has 2 unauthorized disputes in the last 12 months, which under POL-UNA-02 must be escalated to the fraud team instead of refunded automatically.",
+    "self_check_errors": [],
+    "draft_attempts": 1,
+    "steps": 8,
+    "trace": [
+     "intake",
+     "classify",
+     "gather_evidence",
+     "policy_check",
+     "decide",
+     "human_review",
+     "draft_response",
+     "self_check"
+    ],
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6239,
+     "output_tokens": 656,
+     "cost_usd": 0.007631249999999996
+    }
+   }
+  }
+ ]
+}

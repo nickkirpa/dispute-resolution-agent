@@ -11,3 +11,4 @@ data/router/
 data/cases.sqlite
 data/embeddings_cache.json
 models/
+data/*.sqlite*

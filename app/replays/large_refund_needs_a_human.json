@@ -1,0 +1,684 @@
+{
+ "title": "Large refund needs a human",
+ "description": "899 EUR exceeds the 300 EUR review threshold (policy v2): the case pauses for an officer.",
+ "events": [
+  {
+   "type": "start",
+   "case_id": "case-6fb9502c",
+   "config": {
+    "brain": "llm",
+    "evidence_mode": "agent",
+    "kb_version": "v2",
+    "retrieval_mode": "bm25",
+    "router_path": null,
+    "provider": "openai",
+    "model": "openai/gpt-5.4-mini"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "intake",
+   "label": "Reading the complaint",
+   "update": {
+    "steps": 1,
+    "trace": [
+     "intake"
+    ],
+    "claim": {
+     "merchant": "LuxWatch",
+     "amount": 899.0,
+     "currency": "EUR",
+     "transaction_date": "2026-09-15",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "usage": {
+     "llm_calls": 1,
+     "input_tokens": 359,
+     "output_tokens": 49,
+     "cost_usd": 0.0004897499999999971
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "classify",
+   "label": "Classifying the dispute",
+   "update": {
+    "steps": 2,
+    "trace": [
+     "classify"
+    ],
+    "dispute_type": "unauthorized",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "usage": {
+     "llm_calls": 2,
+     "input_tokens": 665,
+     "output_tokens": 69,
+     "cost_usd": 0.0008092499999999975
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "gather_evidence",
+   "label": "Investigating the account",
+   "update": {
+    "steps": 3,
+    "trace": [
+     "gather_evidence"
+    ],
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 899.0 EUR at LuxWatch on: 2026-09-15",
+      "data": {
+       "txn_id": "T050",
+       "customer_id": "C006",
+       "merchant": "LuxWatch",
+       "amount": 899.0,
+       "currency": "EUR",
+       "txn_date": "2026-09-15",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-09-15"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "15 days since transaction",
+      "data": {
+       "days_since_transaction": 15
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-UNA-01",
+      "version": "v2",
+      "title": "Unauthorized transactions",
+      "text": "If the customer reports a transaction they did not make or authorize, the transaction amount is refunded as a provisional credit, the card is blocked and a replacement is issued.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.4568787035563906
+     },
+     {
+      "clause_id": "POL-UNA-02",
+      "version": "v2",
+      "title": "Repeated unauthorized claims",
+      "text": "If the customer has raised two or more unauthorized-transaction disputes in the last 12 months, the case is escalated to the fraud team instead of being refunded automatically.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.388598677013066
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "LuxWatch",
+       "amount": 899.0,
+       "date": "2026-09-15",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "Start by locating the disputed charge and any nearby matching transactions.",
+      "ok": true,
+      "observation": "1 charge(s): T050: 899.00 EUR LuxWatch on 2026-09-15 (online)"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "unauthorized card dispute evidence requirements and decision criteria"
+      },
+      "reason": "We need policy criteria for an unauthorized card dispute before deciding whether the evidence is sufficient to finish.",
+      "ok": true,
+      "observation": "POL-UNA-01: Unauthorized transactions; POL-UNA-02: Repeated unauthorized claims"
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "LuxWatch",
+       "amount": 899.0,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We need to check for duplicate charges and any posted refunds before finishing the unauthorized dispute evidence set.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "I have the charge, no duplicate pattern, and policy; now I need account context to judge unauthorized-claim credibility before finishing.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "LuxWatch",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Check whether a refund already resolved the disputed charge before finishing.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "The core evidence is already gathered and the dispute officer can decide without another lookup.",
+      "ok": true,
+      "observation": "finished"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "usage": {
+     "llm_calls": 8,
+     "input_tokens": 4868,
+     "output_tokens": 443,
+     "cost_usd": 0.005644499999999997
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "policy_check",
+   "label": "Checking required evidence",
+   "update": {
+    "steps": 4,
+    "trace": [
+     "policy_check"
+    ],
+    "missing_evidence": []
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "decide",
+   "label": "Deciding under policy",
+   "update": {
+    "steps": 5,
+    "trace": [
+     "decide"
+    ],
+    "decision": "escalate",
+    "decision_confidence": 0.93,
+    "refund_amount": 0.0,
+    "rationale": "The claim is an unauthorized transaction with a matching LuxWatch charge on the customer\u2019s account, and it was filed within 90 days. However, POL-GEN-04 requires human review for any refund above 300 EUR, and POL-UNA-01 also indicates this type of case is handled as a provisional credit/refund after review rather than an automatic denial or info request.",
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ],
+    "dropped_citations": [
+     "POL-GEN-01",
+     "POL-GEN-02"
+    ],
+    "needs_human": true,
+    "human_reason": "The claim is an unauthorized transaction with a matching LuxWatch charge on the customer\u2019s account, and it was filed within 90 days. However, POL-GEN-04 requires human review for any refund above 300 EUR, and POL-UNA-01 also indicates this type of case is handled as a provisional credit/refund after review rather than an automatic denial or info request.",
+    "usage": {
+     "llm_calls": 9,
+     "input_tokens": 5796,
+     "output_tokens": 573,
+     "cost_usd": 0.006925499999999994
+    }
+   }
+  },
+  {
+   "type": "interrupt",
+   "case_id": "case-6fb9502c",
+   "payload": {
+    "case_id": "case-6fb9502c",
+    "reason": "The claim is an unauthorized transaction with a matching LuxWatch charge on the customer\u2019s account, and it was filed within 90 days. However, POL-GEN-04 requires human review for any refund above 300 EUR, and POL-UNA-01 also indicates this type of case is handled as a provisional credit/refund after review rather than an automatic denial or info request.",
+    "proposed_decision": "escalate",
+    "refund_amount": 0.0,
+    "rationale": "The claim is an unauthorized transaction with a matching LuxWatch charge on the customer\u2019s account, and it was filed within 90 days. However, POL-GEN-04 requires human review for any refund above 300 EUR, and POL-UNA-01 also indicates this type of case is handled as a provisional credit/refund after review rather than an automatic denial or info request.",
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ]
+   }
+  },
+  {
+   "type": "resume",
+   "case_id": "case-6fb9502c",
+   "verdict": {
+    "decision": "refund",
+    "refund_amount": 899.0,
+    "note": "called the customer, confirmed card fraud"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "human_review",
+   "label": "Human review",
+   "update": {
+    "steps": 6,
+    "trace": [
+     "human_review"
+    ],
+    "decision": "refund",
+    "refund_amount": 899.0,
+    "rationale": "The claim is an unauthorized transaction with a matching LuxWatch charge on the customer\u2019s account, and it was filed within 90 days. However, POL-GEN-04 requires human review for any refund above 300 EUR, and POL-UNA-01 also indicates this type of case is handled as a provisional credit/refund after review rather than an automatic denial or info request. | human: called the customer, confirmed card fraud",
+    "needs_human": false,
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ]
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "draft_response",
+   "label": "Writing the reply",
+   "update": {
+    "steps": 7,
+    "trace": [
+     "draft_response"
+    ],
+    "response_draft": "Thank you for reporting this. We\u2019ve issued a provisional credit of 899.00 EUR for the LuxWatch transaction while the dispute is finalised. We reviewed the account details and the case has been confirmed as card fraud. Because the amount is above our standard refund threshold, the case required review before this decision. We\u2019ll continue the dispute process from here. (Policy reference: POL-UNA-01, POL-GEN-04)",
+    "draft_attempts": 1,
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6229,
+     "output_tokens": 671,
+     "cost_usd": 0.007691249999999997
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-6fb9502c",
+   "node": "self_check",
+   "label": "Checking the reply",
+   "update": {
+    "steps": 8,
+    "trace": [
+     "self_check"
+    ],
+    "self_check_errors": []
+   }
+  },
+  {
+   "type": "done",
+   "case_id": "case-6fb9502c",
+   "state": {
+    "case_id": "case-6fb9502c",
+    "next": [],
+    "customer_id": "C006",
+    "narrative": "There's an 899 EUR LuxWatch payment from 15 September that I never made.",
+    "as_of": "2026-09-30",
+    "run_config": {
+     "brain": "llm",
+     "evidence_mode": "agent",
+     "kb_version": "v2",
+     "retrieval_mode": "bm25",
+     "router_path": null,
+     "provider": "openai",
+     "model": "openai/gpt-5.4-mini"
+    },
+    "claim": {
+     "merchant": "LuxWatch",
+     "amount": 899.0,
+     "currency": "EUR",
+     "transaction_date": "2026-09-15",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "dispute_type": "unauthorized",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 899.0 EUR at LuxWatch on: 2026-09-15",
+      "data": {
+       "txn_id": "T050",
+       "customer_id": "C006",
+       "merchant": "LuxWatch",
+       "amount": 899.0,
+       "currency": "EUR",
+       "txn_date": "2026-09-15",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-09-15"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "15 days since transaction",
+      "data": {
+       "days_since_transaction": 15
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-UNA-01",
+      "version": "v2",
+      "title": "Unauthorized transactions",
+      "text": "If the customer reports a transaction they did not make or authorize, the transaction amount is refunded as a provisional credit, the card is blocked and a replacement is issued.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.4568787035563906
+     },
+     {
+      "clause_id": "POL-UNA-02",
+      "version": "v2",
+      "title": "Repeated unauthorized claims",
+      "text": "If the customer has raised two or more unauthorized-transaction disputes in the last 12 months, the case is escalated to the fraud team instead of being refunded automatically.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.388598677013066
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "LuxWatch",
+       "amount": 899.0,
+       "date": "2026-09-15",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "Start by locating the disputed charge and any nearby matching transactions.",
+      "ok": true,
+      "observation": "1 charge(s): T050: 899.00 EUR LuxWatch on 2026-09-15 (online)"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "unauthorized card dispute evidence requirements and decision criteria"
+      },
+      "reason": "We need policy criteria for an unauthorized card dispute before deciding whether the evidence is sufficient to finish.",
+      "ok": true,
+      "observation": "POL-UNA-01: Unauthorized transactions; POL-UNA-02: Repeated unauthorized claims"
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "LuxWatch",
+       "amount": 899.0,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We need to check for duplicate charges and any posted refunds before finishing the unauthorized dispute evidence set.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "I have the charge, no duplicate pattern, and policy; now I need account context to judge unauthorized-claim credibility before finishing.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "LuxWatch",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Check whether a refund already resolved the disputed charge before finishing.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "The core evidence is already gathered and the dispute officer can decide without another lookup.",
+      "ok": true,
+      "observation": "finished"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "missing_evidence": [],
+    "decision": "refund",
+    "decision_confidence": 0.93,
+    "refund_amount": 899.0,
+    "rationale": "The claim is an unauthorized transaction with a matching LuxWatch charge on the customer\u2019s account, and it was filed within 90 days. However, POL-GEN-04 requires human review for any refund above 300 EUR, and POL-UNA-01 also indicates this type of case is handled as a provisional credit/refund after review rather than an automatic denial or info request. | human: called the customer, confirmed card fraud",
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ],
+    "dropped_citations": [
+     "POL-GEN-01",
+     "POL-GEN-02"
+    ],
+    "response_draft": "Thank you for reporting this. We\u2019ve issued a provisional credit of 899.00 EUR for the LuxWatch transaction while the dispute is finalised. We reviewed the account details and the case has been confirmed as card fraud. Because the amount is above our standard refund threshold, the case required review before this decision. We\u2019ll continue the dispute process from here. (Policy reference: POL-UNA-01, POL-GEN-04)",
+    "needs_human": false,
+    "human_reason": "The claim is an unauthorized transaction with a matching LuxWatch charge on the customer\u2019s account, and it was filed within 90 days. However, POL-GEN-04 requires human review for any refund above 300 EUR, and POL-UNA-01 also indicates this type of case is handled as a provisional credit/refund after review rather than an automatic denial or info request.",
+    "self_check_errors": [],
+    "draft_attempts": 1,
+    "steps": 8,
+    "trace": [
+     "intake",
+     "classify",
+     "gather_evidence",
+     "policy_check",
+     "decide",
+     "human_review",
+     "draft_response",
+     "self_check"
+    ],
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6229,
+     "output_tokens": 671,
+     "cost_usd": 0.007691249999999997
+    }
+   }
+  }
+ ]
+}

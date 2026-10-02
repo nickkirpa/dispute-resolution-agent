@@ -1,0 +1,683 @@
+{
+ "title": "Duplicate charge refund",
+ "description": "Two identical SpotiTunes charges a day apart: the agent finds the duplicate and refunds one.",
+ "events": [
+  {
+   "type": "start",
+   "case_id": "case-1ab097f0",
+   "config": {
+    "brain": "llm",
+    "evidence_mode": "agent",
+    "kb_version": "v2",
+    "retrieval_mode": "bm25",
+    "router_path": null,
+    "provider": "openai",
+    "model": "openai/gpt-5.4-mini"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-1ab097f0",
+   "node": "intake",
+   "label": "Reading the complaint",
+   "update": {
+    "steps": 1,
+    "trace": [
+     "intake"
+    ],
+    "claim": {
+     "merchant": "SpotiTunes",
+     "amount": 9.99,
+     "currency": "EUR",
+     "transaction_date": "2026-09-02",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "usage": {
+     "llm_calls": 1,
+     "input_tokens": 368,
+     "output_tokens": 52,
+     "cost_usd": 0.00051
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-1ab097f0",
+   "node": "classify",
+   "label": "Classifying the dispute",
+   "update": {
+    "steps": 2,
+    "trace": [
+     "classify"
+    ],
+    "dispute_type": "duplicate_charge",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "usage": {
+     "llm_calls": 2,
+     "input_tokens": 684,
+     "output_tokens": 72,
+     "cost_usd": 0.0008370000000000001
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-1ab097f0",
+   "node": "gather_evidence",
+   "label": "Investigating the account",
+   "update": {
+    "steps": 3,
+    "trace": [
+     "gather_evidence"
+    ],
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "2 matching charge(s) of 9.99 EUR at SpotiTunes on: 2026-09-02, 2026-09-03",
+      "data": {
+       "txn_id": "T001",
+       "customer_id": "C001",
+       "merchant": "SpotiTunes",
+       "amount": 9.99,
+       "currency": "EUR",
+       "txn_date": "2026-09-02",
+       "channel": "online",
+       "n_matches": 2,
+       "all_dates": [
+        "2026-09-02",
+        "2026-09-03"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "28 days since transaction",
+      "data": {
+       "days_since_transaction": 28
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "duplicate_transactions",
+      "summary": "2 identical charges within 3 days",
+      "data": {
+       "groups": [
+        [
+         {
+          "txn_id": "T001",
+          "customer_id": "C001",
+          "merchant": "SpotiTunes",
+          "amount": 9.99,
+          "currency": "EUR",
+          "txn_date": "2026-09-02",
+          "channel": "online"
+         },
+         {
+          "txn_id": "T002",
+          "customer_id": "C001",
+          "merchant": "SpotiTunes",
+          "amount": 9.99,
+          "currency": "EUR",
+          "txn_date": "2026-09-03",
+          "channel": "online"
+         }
+        ]
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-DUP-01",
+      "version": "v2",
+      "title": "Duplicate charge refunds",
+      "text": "When two or more identical charges from the same merchant for the same amount are posted within 3 days, all but one charge are refunded to the customer as a provisional credit. The customer does not need to contact the merchant first.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 17.532903147212753
+     },
+     {
+      "clause_id": "POL-DUP-02",
+      "version": "v2",
+      "title": "Recurring payments are not duplicates",
+      "text": "Charges from the same merchant for the same amount that are more than 3 days apart are treated as separate (for example recurring subscription) payments, not duplicates. The agent should reject the duplicate claim and explain that subscription cancellations must be made with the merchant.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 9.873533224742985
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "SpotiTunes",
+       "amount": 9.99,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Need to verify whether duplicate identical charges exist and whether any refunds already posted.",
+      "ok": true,
+      "observation": "2 identical charges within 3 days: 2026-09-02, 2026-09-03"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "SpotiTunes",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "I have the duplicate pair; now I need to check whether any merchant credit already reversed one of the charges before deciding.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "duplicate_charge policy identical charges evidence duplicate within days merchant refunds customer history required"
+      },
+      "reason": "Need policy criteria for duplicate-charge disputes before concluding.",
+      "ok": true,
+      "observation": "POL-DUP-01: Duplicate charge refunds; POL-DUP-02: Recurring payments are not duplicates"
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "I need the customer's account context to confirm whether there is prior dispute history relevant to adjudicating this duplicate-charge claim.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "We already have duplicate evidence, refunds, policy, and customer history; no further tool call is needed before concluding.",
+      "ok": true,
+      "observation": "finished"
+     },
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "SpotiTunes",
+       "amount": 9.99,
+       "date": "2026-09-02",
+       "window_days": null,
+       "query": null
+      },
+      "reason": "plan: transaction search",
+      "ok": true,
+      "observation": "2 charge(s): T001: 9.99 EUR SpotiTunes on 2026-09-02 (online); T002: 9.99 EUR SpotiTunes on 2026-09-03 (online)"
+     }
+    ],
+    "coverage_fills": [
+     "transaction_search"
+    ],
+    "fallback_error": null,
+    "usage": {
+     "llm_calls": 7,
+     "input_tokens": 4058,
+     "output_tokens": 390,
+     "cost_usd": 0.004798500000000001
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-1ab097f0",
+   "node": "policy_check",
+   "label": "Checking required evidence",
+   "update": {
+    "steps": 4,
+    "trace": [
+     "policy_check"
+    ],
+    "missing_evidence": []
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-1ab097f0",
+   "node": "decide",
+   "label": "Deciding under policy",
+   "update": {
+    "steps": 5,
+    "trace": [
+     "decide"
+    ],
+    "decision": "refund",
+    "decision_confidence": 0.98,
+    "refund_amount": 9.99,
+    "rationale": "Two identical SpotiTunes charges for 9.99 EUR posted within 3 days (2026-09-02 and 2026-09-03), which meets the duplicate-charge refund rule. The dispute was filed within 90 days, and the customer does not need to contact the merchant first.",
+    "cited_clauses": [
+     "POL-DUP-01"
+    ],
+    "dropped_citations": [
+     "POL-GEN-02"
+    ],
+    "needs_human": false,
+    "human_reason": "",
+    "usage": {
+     "llm_calls": 8,
+     "input_tokens": 5150,
+     "output_tokens": 492,
+     "cost_usd": 0.0060765
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-1ab097f0",
+   "node": "draft_response",
+   "label": "Writing the reply",
+   "update": {
+    "steps": 6,
+    "trace": [
+     "draft_response"
+    ],
+    "response_draft": "Thanks for letting us know. We\u2019ve reviewed the SpotiTunes charges and found a duplicate charge. We\u2019ll apply a provisional credit of 9.99 EUR while the dispute is finalised. You do not need to contact the merchant first for this type of claim. (Policy reference: POL-DUP-01)",
+    "draft_attempts": 1,
+    "usage": {
+     "llm_calls": 9,
+     "input_tokens": 5580,
+     "output_tokens": 566,
+     "cost_usd": 0.006732
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-1ab097f0",
+   "node": "self_check",
+   "label": "Checking the reply",
+   "update": {
+    "steps": 7,
+    "trace": [
+     "self_check"
+    ],
+    "self_check_errors": []
+   }
+  },
+  {
+   "type": "done",
+   "case_id": "case-1ab097f0",
+   "state": {
+    "case_id": "case-1ab097f0",
+    "next": [],
+    "customer_id": "C001",
+    "narrative": "I was charged twice by SpotiTunes, 9.99 EUR each, on 2 September. Please refund the duplicate.",
+    "as_of": "2026-09-30",
+    "run_config": {
+     "brain": "llm",
+     "evidence_mode": "agent",
+     "kb_version": "v2",
+     "retrieval_mode": "bm25",
+     "router_path": null,
+     "provider": "openai",
+     "model": "openai/gpt-5.4-mini"
+    },
+    "claim": {
+     "merchant": "SpotiTunes",
+     "amount": 9.99,
+     "currency": "EUR",
+     "transaction_date": "2026-09-02",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "dispute_type": "duplicate_charge",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "2 matching charge(s) of 9.99 EUR at SpotiTunes on: 2026-09-02, 2026-09-03",
+      "data": {
+       "txn_id": "T001",
+       "customer_id": "C001",
+       "merchant": "SpotiTunes",
+       "amount": 9.99,
+       "currency": "EUR",
+       "txn_date": "2026-09-02",
+       "channel": "online",
+       "n_matches": 2,
+       "all_dates": [
+        "2026-09-02",
+        "2026-09-03"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "28 days since transaction",
+      "data": {
+       "days_since_transaction": 28
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "duplicate_transactions",
+      "summary": "2 identical charges within 3 days",
+      "data": {
+       "groups": [
+        [
+         {
+          "txn_id": "T001",
+          "customer_id": "C001",
+          "merchant": "SpotiTunes",
+          "amount": 9.99,
+          "currency": "EUR",
+          "txn_date": "2026-09-02",
+          "channel": "online"
+         },
+         {
+          "txn_id": "T002",
+          "customer_id": "C001",
+          "merchant": "SpotiTunes",
+          "amount": 9.99,
+          "currency": "EUR",
+          "txn_date": "2026-09-03",
+          "channel": "online"
+         }
+        ]
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-DUP-01",
+      "version": "v2",
+      "title": "Duplicate charge refunds",
+      "text": "When two or more identical charges from the same merchant for the same amount are posted within 3 days, all but one charge are refunded to the customer as a provisional credit. The customer does not need to contact the merchant first.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 17.532903147212753
+     },
+     {
+      "clause_id": "POL-DUP-02",
+      "version": "v2",
+      "title": "Recurring payments are not duplicates",
+      "text": "Charges from the same merchant for the same amount that are more than 3 days apart are treated as separate (for example recurring subscription) payments, not duplicates. The agent should reject the duplicate claim and explain that subscription cancellations must be made with the merchant.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 9.873533224742985
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "SpotiTunes",
+       "amount": 9.99,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Need to verify whether duplicate identical charges exist and whether any refunds already posted.",
+      "ok": true,
+      "observation": "2 identical charges within 3 days: 2026-09-02, 2026-09-03"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "SpotiTunes",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "I have the duplicate pair; now I need to check whether any merchant credit already reversed one of the charges before deciding.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "duplicate_charge policy identical charges evidence duplicate within days merchant refunds customer history required"
+      },
+      "reason": "Need policy criteria for duplicate-charge disputes before concluding.",
+      "ok": true,
+      "observation": "POL-DUP-01: Duplicate charge refunds; POL-DUP-02: Recurring payments are not duplicates"
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "I need the customer's account context to confirm whether there is prior dispute history relevant to adjudicating this duplicate-charge claim.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "We already have duplicate evidence, refunds, policy, and customer history; no further tool call is needed before concluding.",
+      "ok": true,
+      "observation": "finished"
+     },
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "SpotiTunes",
+       "amount": 9.99,
+       "date": "2026-09-02",
+       "window_days": null,
+       "query": null
+      },
+      "reason": "plan: transaction search",
+      "ok": true,
+      "observation": "2 charge(s): T001: 9.99 EUR SpotiTunes on 2026-09-02 (online); T002: 9.99 EUR SpotiTunes on 2026-09-03 (online)"
+     }
+    ],
+    "coverage_fills": [
+     "transaction_search"
+    ],
+    "fallback_error": null,
+    "missing_evidence": [],
+    "decision": "refund",
+    "decision_confidence": 0.98,
+    "refund_amount": 9.99,
+    "rationale": "Two identical SpotiTunes charges for 9.99 EUR posted within 3 days (2026-09-02 and 2026-09-03), which meets the duplicate-charge refund rule. The dispute was filed within 90 days, and the customer does not need to contact the merchant first.",
+    "cited_clauses": [
+     "POL-DUP-01"
+    ],
+    "dropped_citations": [
+     "POL-GEN-02"
+    ],
+    "response_draft": "Thanks for letting us know. We\u2019ve reviewed the SpotiTunes charges and found a duplicate charge. We\u2019ll apply a provisional credit of 9.99 EUR while the dispute is finalised. You do not need to contact the merchant first for this type of claim. (Policy reference: POL-DUP-01)",
+    "needs_human": false,
+    "human_reason": "",
+    "self_check_errors": [],
+    "draft_attempts": 1,
+    "steps": 7,
+    "trace": [
+     "intake",
+     "classify",
+     "gather_evidence",
+     "policy_check",
+     "decide",
+     "draft_response",
+     "self_check"
+    ],
+    "usage": {
+     "llm_calls": 9,
+     "input_tokens": 5580,
+     "output_tokens": 566,
+     "cost_usd": 0.006732
+    }
+   }
+  }
+ ]
+}

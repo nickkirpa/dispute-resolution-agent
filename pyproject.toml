@@ -18,6 +18,8 @@ dependencies = [
 [project.optional-dependencies]
 # Days 8-9: fine-tuned transformer router
 router = ["torch>=2.4", "transformers>=4.48", "accelerate>=1.1", "datasets>=3.0", "scikit-learn>=1.5"]
+# Days 13-14: Streamlit demo app
+app = ["streamlit>=1.40", "pandas>=2.2", "altair>=5.4"]
 
 [dependency-groups]
 dev = ["pytest>=8"]

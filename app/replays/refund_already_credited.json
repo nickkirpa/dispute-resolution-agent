@@ -1,0 +1,617 @@
+{
+ "title": "Refund already credited",
+ "description": "The merchant's refund is already on the account; the agent rejects instead of paying twice.",
+ "events": [
+  {
+   "type": "start",
+   "case_id": "case-3f441b20",
+   "config": {
+    "brain": "llm",
+    "evidence_mode": "agent",
+    "kb_version": "v2",
+    "retrieval_mode": "bm25",
+    "router_path": null,
+    "provider": "openai",
+    "model": "openai/gpt-5.4-mini"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-3f441b20",
+   "node": "intake",
+   "label": "Reading the complaint",
+   "update": {
+    "steps": 1,
+    "trace": [
+     "intake"
+    ],
+    "claim": {
+     "merchant": "AirFly",
+     "amount": 410.0,
+     "currency": "EUR",
+     "transaction_date": "2026-08-01",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": true
+    },
+    "usage": {
+     "llm_calls": 1,
+     "input_tokens": 368,
+     "output_tokens": 51,
+     "cost_usd": 0.0005055000000000007
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-3f441b20",
+   "node": "classify",
+   "label": "Classifying the dispute",
+   "update": {
+    "steps": 2,
+    "trace": [
+     "classify"
+    ],
+    "dispute_type": "refund_not_processed",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "usage": {
+     "llm_calls": 2,
+     "input_tokens": 683,
+     "output_tokens": 72,
+     "cost_usd": 0.0008362500000000002
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-3f441b20",
+   "node": "gather_evidence",
+   "label": "Investigating the account",
+   "update": {
+    "steps": 3,
+    "trace": [
+     "gather_evidence"
+    ],
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 410.0 EUR at AirFly on: 2026-08-01",
+      "data": {
+       "txn_id": "T080",
+       "customer_id": "C009",
+       "merchant": "AirFly",
+       "amount": 410.0,
+       "currency": "EUR",
+       "txn_date": "2026-08-01",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-08-01"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "60 days since transaction",
+      "data": {
+       "days_since_transaction": 60
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "merchant_refunds",
+      "summary": "1 credit(s) from merchant already posted",
+      "data": {
+       "refunds": [
+        {
+         "txn_id": "T081",
+         "customer_id": "C009",
+         "merchant": "AirFly",
+         "amount": -410.0,
+         "currency": "EUR",
+         "txn_date": "2026-08-20",
+         "channel": "online"
+        }
+       ]
+      }
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-REF-01",
+      "version": "v2",
+      "title": "Merchant refund not processed",
+      "text": "If a merchant promised a refund that has not appeared on the account, and no matching credit from that merchant exists in the ledger, the original transaction amount is refunded as a provisional credit.",
+      "applies_to": [
+       "refund_not_processed"
+      ],
+      "score": 14.412154904171405
+     },
+     {
+      "clause_id": "POL-REF-02",
+      "version": "v2",
+      "title": "Refund already credited",
+      "text": "If the ledger already shows a credit from the merchant matching the refund, the dispute is rejected and the customer is shown the date the credit was posted.",
+      "applies_to": [
+       "refund_not_processed"
+      ],
+      "score": 9.595901720215032
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "AirFly",
+       "amount": 410.0,
+       "date": "2026-08-01",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "First, verify the original charge and any posted refund for this merchant.",
+      "ok": true,
+      "observation": "1 charge(s): T080: 410.00 EUR AirFly on 2026-08-01 (online)"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "AirFly",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Check whether the merchant has already posted any refund credit for this AirFly charge.",
+      "ok": true,
+      "observation": "Credits posted: 410.00 on 2026-08-20"
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "We already have the charge and a matching posted refund, so I can stop with sufficient evidence for this dispute type.",
+      "ok": true,
+      "observation": "finished"
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "coverage",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "refund_not_processed AirFly promised me a refund for my cancelled 410.00 EUR flight booked on 1 August, but it never arrived."
+      },
+      "reason": "coverage",
+      "ok": true,
+      "observation": "POL-REF-01: Merchant refund not processed; POL-REF-02: Refund already credited"
+     }
+    ],
+    "coverage_fills": [
+     "customer_history",
+     "search_policy"
+    ],
+    "fallback_error": null,
+    "usage": {
+     "llm_calls": 5,
+     "input_tokens": 2634,
+     "output_tokens": 258,
+     "cost_usd": 0.0031364999999999987
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-3f441b20",
+   "node": "policy_check",
+   "label": "Checking required evidence",
+   "update": {
+    "steps": 4,
+    "trace": [
+     "policy_check"
+    ],
+    "missing_evidence": []
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-3f441b20",
+   "node": "decide",
+   "label": "Deciding under policy",
+   "update": {
+    "steps": 5,
+    "trace": [
+     "decide"
+    ],
+    "decision": "reject",
+    "decision_confidence": 0.98,
+    "refund_amount": 0.0,
+    "rationale": "The ledger already shows a credit from AirFly matching the refund amount, so this is a refund already credited case rather than a refund not processed case. Under policy, such disputes are rejected and the customer should be shown the credit date.",
+    "cited_clauses": [
+     "POL-REF-02"
+    ],
+    "dropped_citations": [],
+    "needs_human": false,
+    "human_reason": "",
+    "usage": {
+     "llm_calls": 6,
+     "input_tokens": 3600,
+     "output_tokens": 339,
+     "cost_usd": 0.004225499999999998
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-3f441b20",
+   "node": "draft_response",
+   "label": "Writing the reply",
+   "update": {
+    "steps": 6,
+    "trace": [
+     "draft_response"
+    ],
+    "response_draft": "I\u2019m sorry for the frustration. We reviewed your AirFly refund request for 410.00 EUR from 2026-08-01, and the ledger shows a credit from AirFly for the same amount. Because the merchant\u2019s credit is already on your account, this is shown on your statement and is not treated as a refund not processed case. (Policy reference: POL-REF-02)",
+    "draft_attempts": 1,
+    "usage": {
+     "llm_calls": 7,
+     "input_tokens": 4009,
+     "output_tokens": 430,
+     "cost_usd": 0.00494175
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-3f441b20",
+   "node": "self_check",
+   "label": "Checking the reply",
+   "update": {
+    "steps": 7,
+    "trace": [
+     "self_check"
+    ],
+    "self_check_errors": []
+   }
+  },
+  {
+   "type": "done",
+   "case_id": "case-3f441b20",
+   "state": {
+    "case_id": "case-3f441b20",
+    "next": [],
+    "customer_id": "C009",
+    "narrative": "AirFly promised me a refund for my cancelled 410.00 EUR flight booked on 1 August, but it never arrived.",
+    "as_of": "2026-09-30",
+    "run_config": {
+     "brain": "llm",
+     "evidence_mode": "agent",
+     "kb_version": "v2",
+     "retrieval_mode": "bm25",
+     "router_path": null,
+     "provider": "openai",
+     "model": "openai/gpt-5.4-mini"
+    },
+    "claim": {
+     "merchant": "AirFly",
+     "amount": 410.0,
+     "currency": "EUR",
+     "transaction_date": "2026-08-01",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": true
+    },
+    "dispute_type": "refund_not_processed",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 410.0 EUR at AirFly on: 2026-08-01",
+      "data": {
+       "txn_id": "T080",
+       "customer_id": "C009",
+       "merchant": "AirFly",
+       "amount": 410.0,
+       "currency": "EUR",
+       "txn_date": "2026-08-01",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-08-01"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "60 days since transaction",
+      "data": {
+       "days_since_transaction": 60
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "merchant_refunds",
+      "summary": "1 credit(s) from merchant already posted",
+      "data": {
+       "refunds": [
+        {
+         "txn_id": "T081",
+         "customer_id": "C009",
+         "merchant": "AirFly",
+         "amount": -410.0,
+         "currency": "EUR",
+         "txn_date": "2026-08-20",
+         "channel": "online"
+        }
+       ]
+      }
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-REF-01",
+      "version": "v2",
+      "title": "Merchant refund not processed",
+      "text": "If a merchant promised a refund that has not appeared on the account, and no matching credit from that merchant exists in the ledger, the original transaction amount is refunded as a provisional credit.",
+      "applies_to": [
+       "refund_not_processed"
+      ],
+      "score": 14.412154904171405
+     },
+     {
+      "clause_id": "POL-REF-02",
+      "version": "v2",
+      "title": "Refund already credited",
+      "text": "If the ledger already shows a credit from the merchant matching the refund, the dispute is rejected and the customer is shown the date the credit was posted.",
+      "applies_to": [
+       "refund_not_processed"
+      ],
+      "score": 9.595901720215032
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "AirFly",
+       "amount": 410.0,
+       "date": "2026-08-01",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "First, verify the original charge and any posted refund for this merchant.",
+      "ok": true,
+      "observation": "1 charge(s): T080: 410.00 EUR AirFly on 2026-08-01 (online)"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "AirFly",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Check whether the merchant has already posted any refund credit for this AirFly charge.",
+      "ok": true,
+      "observation": "Credits posted: 410.00 on 2026-08-20"
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "We already have the charge and a matching posted refund, so I can stop with sufficient evidence for this dispute type.",
+      "ok": true,
+      "observation": "finished"
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "coverage",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "refund_not_processed AirFly promised me a refund for my cancelled 410.00 EUR flight booked on 1 August, but it never arrived."
+      },
+      "reason": "coverage",
+      "ok": true,
+      "observation": "POL-REF-01: Merchant refund not processed; POL-REF-02: Refund already credited"
+     }
+    ],
+    "coverage_fills": [
+     "customer_history",
+     "search_policy"
+    ],
+    "fallback_error": null,
+    "missing_evidence": [],
+    "decision": "reject",
+    "decision_confidence": 0.98,
+    "refund_amount": 0.0,
+    "rationale": "The ledger already shows a credit from AirFly matching the refund amount, so this is a refund already credited case rather than a refund not processed case. Under policy, such disputes are rejected and the customer should be shown the credit date.",
+    "cited_clauses": [
+     "POL-REF-02"
+    ],
+    "dropped_citations": [],
+    "response_draft": "I\u2019m sorry for the frustration. We reviewed your AirFly refund request for 410.00 EUR from 2026-08-01, and the ledger shows a credit from AirFly for the same amount. Because the merchant\u2019s credit is already on your account, this is shown on your statement and is not treated as a refund not processed case. (Policy reference: POL-REF-02)",
+    "needs_human": false,
+    "human_reason": "",
+    "self_check_errors": [],
+    "draft_attempts": 1,
+    "steps": 7,
+    "trace": [
+     "intake",
+     "classify",
+     "gather_evidence",
+     "policy_check",
+     "decide",
+     "draft_response",
+     "self_check"
+    ],
+    "usage": {
+     "llm_calls": 7,
+     "input_tokens": 4009,
+     "output_tokens": 430,
+     "cost_usd": 0.00494175
+    }
+   }
+  }
+ ]
+}

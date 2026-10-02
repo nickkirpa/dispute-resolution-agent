@@ -1,0 +1,601 @@
+{
+ "title": "Charge not found",
+ "description": "No FitClub charge on this account: the agent says so and asks only for what would identify it.",
+ "events": [
+  {
+   "type": "start",
+   "case_id": "case-ac275d04",
+   "config": {
+    "brain": "llm",
+    "evidence_mode": "agent",
+    "kb_version": "v2",
+    "retrieval_mode": "bm25",
+    "router_path": null,
+    "provider": "openai",
+    "model": "openai/gpt-5.4-mini"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-ac275d04",
+   "node": "intake",
+   "label": "Reading the complaint",
+   "update": {
+    "steps": 1,
+    "trace": [
+     "intake"
+    ],
+    "claim": {
+     "merchant": "FitClub",
+     "amount": 49.0,
+     "currency": "EUR",
+     "transaction_date": "2026-09-12",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "usage": {
+     "llm_calls": 1,
+     "input_tokens": 361,
+     "output_tokens": 49,
+     "cost_usd": 0.0004912499999999986
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-ac275d04",
+   "node": "classify",
+   "label": "Classifying the dispute",
+   "update": {
+    "steps": 2,
+    "trace": [
+     "classify"
+    ],
+    "dispute_type": "duplicate_charge",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "usage": {
+     "llm_calls": 2,
+     "input_tokens": 669,
+     "output_tokens": 69,
+     "cost_usd": 0.000812249999999997
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-ac275d04",
+   "node": "gather_evidence",
+   "label": "Investigating the account",
+   "update": {
+    "steps": 3,
+    "trace": [
+     "gather_evidence"
+    ],
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-DUP-01",
+      "version": "v2",
+      "title": "Duplicate charge refunds",
+      "text": "When two or more identical charges from the same merchant for the same amount are posted within 3 days, all but one charge are refunded to the customer as a provisional credit. The customer does not need to contact the merchant first.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 15.320809105419732
+     },
+     {
+      "clause_id": "POL-DUP-02",
+      "version": "v2",
+      "title": "Recurring payments are not duplicates",
+      "text": "Charges from the same merchant for the same amount that are more than 3 days apart are treated as separate (for example recurring subscription) payments, not duplicates. The agent should reject the duplicate claim and explain that subscription cancellations must be made with the merchant.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 11.325804986402819
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "FitClub",
+       "amount": 49.0,
+       "date": "2026-09-12",
+       "window_days": 3,
+       "query": null
+      },
+      "reason": "I need the transaction record first to verify whether there were one or two FitClub charges on the claimed date.",
+      "ok": true,
+      "observation": "0 charges match."
+     },
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "FitClub",
+       "amount": null,
+       "date": "2026-09-12",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "The narrow search found nothing, so I should widen the transaction search once to look for FitClub charges around the claimed date without the amount filter.",
+      "ok": true,
+      "observation": "0 charges match."
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "FitClub",
+       "amount": 49.0,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "A duplicate-charge dispute needs either matching charges or a clear no-match record, so I should check for any identical FitClub charges in the broader account history.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "FitClub",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Need to check for any merchant credits before deciding whether the duplicate claim is unsupported by the ledger.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We still need account context for dispute handling and to confirm whether prior disputes affect eligibility.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "duplicate_charge policy evidence requirements merchant duplicate within 3 days refund no charge found"
+      },
+      "reason": "Policy evidence is the only missing piece before ending the dispute review.",
+      "ok": true,
+      "observation": "POL-DUP-01: Duplicate charge refunds; POL-DUP-02: Recurring payments are not duplicates"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "usage": {
+     "llm_calls": 8,
+     "input_tokens": 4740,
+     "output_tokens": 485,
+     "cost_usd": 0.005737499999999996
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-ac275d04",
+   "node": "policy_check",
+   "label": "Checking required evidence",
+   "update": {
+    "steps": 4,
+    "trace": [
+     "policy_check"
+    ],
+    "missing_evidence": [
+     "transaction_identification"
+    ]
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-ac275d04",
+   "node": "decide",
+   "label": "Deciding under policy",
+   "update": {
+    "steps": 5,
+    "trace": [
+     "decide"
+    ],
+    "decision": "request_info",
+    "decision_confidence": 0.98,
+    "refund_amount": 0.0,
+    "rationale": "The claim is missing required transaction identification, and POL-GEN-03 says the customer must provide the transaction date, merchant name, and amount before any decision is made when no matching transaction can be identified. Also, the tools found no identical charges within 3 days, so the duplicate condition under POL-DUP-01 is not established.",
+    "cited_clauses": [
+     "POL-GEN-03"
+    ],
+    "dropped_citations": [
+     "POL-DUP-01"
+    ],
+    "needs_human": false,
+    "human_reason": "",
+    "usage": {
+     "llm_calls": 9,
+     "input_tokens": 5585,
+     "output_tokens": 594,
+     "cost_usd": 0.006861749999999996
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-ac275d04",
+   "node": "draft_response",
+   "label": "Writing the reply",
+   "update": {
+    "steps": 6,
+    "trace": [
+     "draft_response"
+    ],
+    "response_draft": "Thanks for contacting us. We couldn\u2019t find a charge on your account matching the FitClub transaction you described: 49.00 EUR on 2026-09-12. To help us identify it, please send the exact transaction date, or a screenshot of the statement line. (Policy reference: POL-GEN-03)",
+    "draft_attempts": 1,
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6010,
+     "output_tokens": 671,
+     "cost_usd": 0.0075269999999999955
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-ac275d04",
+   "node": "self_check",
+   "label": "Checking the reply",
+   "update": {
+    "steps": 7,
+    "trace": [
+     "self_check"
+    ],
+    "self_check_errors": []
+   }
+  },
+  {
+   "type": "done",
+   "case_id": "case-ac275d04",
+   "state": {
+    "case_id": "case-ac275d04",
+    "next": [],
+    "customer_id": "C012",
+    "narrative": "FitClub charged me twice, 49.00 EUR each time, on 12 September.",
+    "as_of": "2026-09-30",
+    "run_config": {
+     "brain": "llm",
+     "evidence_mode": "agent",
+     "kb_version": "v2",
+     "retrieval_mode": "bm25",
+     "router_path": null,
+     "provider": "openai",
+     "model": "openai/gpt-5.4-mini"
+    },
+    "claim": {
+     "merchant": "FitClub",
+     "amount": 49.0,
+     "currency": "EUR",
+     "transaction_date": "2026-09-12",
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "dispute_type": "duplicate_charge",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-DUP-01",
+      "version": "v2",
+      "title": "Duplicate charge refunds",
+      "text": "When two or more identical charges from the same merchant for the same amount are posted within 3 days, all but one charge are refunded to the customer as a provisional credit. The customer does not need to contact the merchant first.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 15.320809105419732
+     },
+     {
+      "clause_id": "POL-DUP-02",
+      "version": "v2",
+      "title": "Recurring payments are not duplicates",
+      "text": "Charges from the same merchant for the same amount that are more than 3 days apart are treated as separate (for example recurring subscription) payments, not duplicates. The agent should reject the duplicate claim and explain that subscription cancellations must be made with the merchant.",
+      "applies_to": [
+       "duplicate_charge"
+      ],
+      "score": 11.325804986402819
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "FitClub",
+       "amount": 49.0,
+       "date": "2026-09-12",
+       "window_days": 3,
+       "query": null
+      },
+      "reason": "I need the transaction record first to verify whether there were one or two FitClub charges on the claimed date.",
+      "ok": true,
+      "observation": "0 charges match."
+     },
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "FitClub",
+       "amount": null,
+       "date": "2026-09-12",
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "The narrow search found nothing, so I should widen the transaction search once to look for FitClub charges around the claimed date without the amount filter.",
+      "ok": true,
+      "observation": "0 charges match."
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "FitClub",
+       "amount": 49.0,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "A duplicate-charge dispute needs either matching charges or a clear no-match record, so I should check for any identical FitClub charges in the broader account history.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "FitClub",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "Need to check for any merchant credits before deciding whether the duplicate claim is unsupported by the ledger.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We still need account context for dispute handling and to confirm whether prior disputes affect eligibility.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "duplicate_charge policy evidence requirements merchant duplicate within 3 days refund no charge found"
+      },
+      "reason": "Policy evidence is the only missing piece before ending the dispute review.",
+      "ok": true,
+      "observation": "POL-DUP-01: Duplicate charge refunds; POL-DUP-02: Recurring payments are not duplicates"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "missing_evidence": [
+     "transaction_identification"
+    ],
+    "decision": "request_info",
+    "decision_confidence": 0.98,
+    "refund_amount": 0.0,
+    "rationale": "The claim is missing required transaction identification, and POL-GEN-03 says the customer must provide the transaction date, merchant name, and amount before any decision is made when no matching transaction can be identified. Also, the tools found no identical charges within 3 days, so the duplicate condition under POL-DUP-01 is not established.",
+    "cited_clauses": [
+     "POL-GEN-03"
+    ],
+    "dropped_citations": [
+     "POL-DUP-01"
+    ],
+    "response_draft": "Thanks for contacting us. We couldn\u2019t find a charge on your account matching the FitClub transaction you described: 49.00 EUR on 2026-09-12. To help us identify it, please send the exact transaction date, or a screenshot of the statement line. (Policy reference: POL-GEN-03)",
+    "needs_human": false,
+    "human_reason": "",
+    "self_check_errors": [],
+    "draft_attempts": 1,
+    "steps": 7,
+    "trace": [
+     "intake",
+     "classify",
+     "gather_evidence",
+     "policy_check",
+     "decide",
+     "draft_response",
+     "self_check"
+    ],
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6010,
+     "output_tokens": 671,
+     "cost_usd": 0.0075269999999999955
+    }
+   }
+  }
+ ]
+}

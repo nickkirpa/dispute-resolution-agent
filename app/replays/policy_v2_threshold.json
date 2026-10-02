@@ -1,0 +1,682 @@
+{
+ "title": "Policy v2 threshold",
+ "description": "350 EUR: auto-refund under v1 (500 EUR limit), human review under v2 (300 EUR).",
+ "events": [
+  {
+   "type": "start",
+   "case_id": "case-98c9e847",
+   "config": {
+    "brain": "llm",
+    "evidence_mode": "agent",
+    "kb_version": "v2",
+    "retrieval_mode": "bm25",
+    "router_path": null,
+    "provider": "openai",
+    "model": "openai/gpt-5.4-mini"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "intake",
+   "label": "Reading the complaint",
+   "update": {
+    "steps": 1,
+    "trace": [
+     "intake"
+    ],
+    "claim": {
+     "merchant": "AirFly",
+     "amount": 350.0,
+     "currency": "EUR",
+     "transaction_date": null,
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "usage": {
+     "llm_calls": 1,
+     "input_tokens": 362,
+     "output_tokens": 46,
+     "cost_usd": 0.00047849999999999976
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "classify",
+   "label": "Classifying the dispute",
+   "update": {
+    "steps": 2,
+    "trace": [
+     "classify"
+    ],
+    "dispute_type": "unauthorized",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "usage": {
+     "llm_calls": 2,
+     "input_tokens": 666,
+     "output_tokens": 66,
+     "cost_usd": 0.0007964999999999986
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "gather_evidence",
+   "label": "Investigating the account",
+   "update": {
+    "steps": 3,
+    "trace": [
+     "gather_evidence"
+    ],
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 350.0 EUR at AirFly on: 2026-09-20",
+      "data": {
+       "txn_id": "T140",
+       "customer_id": "C014",
+       "merchant": "AirFly",
+       "amount": 350.0,
+       "currency": "EUR",
+       "txn_date": "2026-09-20",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-09-20"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "10 days since transaction",
+      "data": {
+       "days_since_transaction": 10
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-UNA-01",
+      "version": "v2",
+      "title": "Unauthorized transactions",
+      "text": "If the customer reports a transaction they did not make or authorize, the transaction amount is refunded as a provisional credit, the card is blocked and a replacement is issued.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.4568787035563906
+     },
+     {
+      "clause_id": "POL-UNA-02",
+      "version": "v2",
+      "title": "Repeated unauthorized claims",
+      "text": "If the customer has raised two or more unauthorized-transaction disputes in the last 12 months, the case is escalated to the fraud team instead of being refunded automatically.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.388598677013066
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "AirFly",
+       "amount": 350.0,
+       "date": null,
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "I need to confirm whether the charge exists on the account before applying unauthorized-dispute policy.",
+      "ok": true,
+      "observation": "1 charge(s): T140: 350.00 EUR AirFly on 2026-09-20 (online)"
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "AirFly",
+       "amount": 350.0,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the disputed transaction; next I need to check whether there are duplicate AirFly charges that would undermine an unauthorized claim.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "unauthorized card dispute evidence requirements and decision criteria"
+      },
+      "reason": "We need policy criteria for an unauthorized card dispute before deciding if the evidence is sufficient to finish.",
+      "ok": true,
+      "observation": "POL-UNA-01: Unauthorized transactions; POL-UNA-02: Repeated unauthorized claims"
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the transaction and duplicate check; the remaining key evidence for an unauthorized claim is customer account history and prior disputes.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "AirFly",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the transaction, no duplicate pattern, customer history, and policy; next I need to check for any posted refund before finishing the evidence set.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "Enough evidence is already collected to decide an unauthorized dispute, so I will finish.",
+      "ok": true,
+      "observation": "finished"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "usage": {
+     "llm_calls": 8,
+     "input_tokens": 4794,
+     "output_tokens": 457,
+     "cost_usd": 0.005651999999999997
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "policy_check",
+   "label": "Checking required evidence",
+   "update": {
+    "steps": 4,
+    "trace": [
+     "policy_check"
+    ],
+    "missing_evidence": []
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "decide",
+   "label": "Deciding under policy",
+   "update": {
+    "steps": 5,
+    "trace": [
+     "decide"
+    ],
+    "decision": "escalate",
+    "decision_confidence": 0.98,
+    "refund_amount": 0.0,
+    "rationale": "The claim is an unauthorized transaction and there is a matching charge for 350.00 EUR at AirFly within the 90-day filing window, so it falls under POL-UNA-01. However, the amount is above 300 EUR, which requires human review before the customer is notified under POL-GEN-04.",
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ],
+    "dropped_citations": [
+     "POL-GEN-02"
+    ],
+    "needs_human": true,
+    "human_reason": "The claim is an unauthorized transaction and there is a matching charge for 350.00 EUR at AirFly within the 90-day filing window, so it falls under POL-UNA-01. However, the amount is above 300 EUR, which requires human review before the customer is notified under POL-GEN-04.",
+    "usage": {
+     "llm_calls": 9,
+     "input_tokens": 5720,
+     "output_tokens": 570,
+     "cost_usd": 0.006855
+    }
+   }
+  },
+  {
+   "type": "interrupt",
+   "case_id": "case-98c9e847",
+   "payload": {
+    "case_id": "case-98c9e847",
+    "reason": "The claim is an unauthorized transaction and there is a matching charge for 350.00 EUR at AirFly within the 90-day filing window, so it falls under POL-UNA-01. However, the amount is above 300 EUR, which requires human review before the customer is notified under POL-GEN-04.",
+    "proposed_decision": "escalate",
+    "refund_amount": 0.0,
+    "rationale": "The claim is an unauthorized transaction and there is a matching charge for 350.00 EUR at AirFly within the 90-day filing window, so it falls under POL-UNA-01. However, the amount is above 300 EUR, which requires human review before the customer is notified under POL-GEN-04.",
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ]
+   }
+  },
+  {
+   "type": "resume",
+   "case_id": "case-98c9e847",
+   "verdict": {
+    "decision": "refund",
+    "refund_amount": 350.0,
+    "note": "verified with the customer"
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "human_review",
+   "label": "Human review",
+   "update": {
+    "steps": 6,
+    "trace": [
+     "human_review"
+    ],
+    "decision": "refund",
+    "refund_amount": 350.0,
+    "rationale": "The claim is an unauthorized transaction and there is a matching charge for 350.00 EUR at AirFly within the 90-day filing window, so it falls under POL-UNA-01. However, the amount is above 300 EUR, which requires human review before the customer is notified under POL-GEN-04. | human: verified with the customer",
+    "needs_human": false,
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ]
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "draft_response",
+   "label": "Writing the reply",
+   "update": {
+    "steps": 7,
+    "trace": [
+     "draft_response"
+    ],
+    "response_draft": "We\u2019ve reviewed your dispute and will issue a provisional credit of 350.00 EUR while the dispute is finalised. The transaction was found for AirFly, and your report was verified with you as unauthorized. Because this amount requires human review before customer notification, the case will now proceed through that step. We\u2019ll keep you updated on the outcome. (Policy reference: POL-UNA-01, POL-GEN-04)",
+    "draft_attempts": 1,
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6130,
+     "output_tokens": 666,
+     "cost_usd": 0.007594499999999997
+    }
+   }
+  },
+  {
+   "type": "step",
+   "case_id": "case-98c9e847",
+   "node": "self_check",
+   "label": "Checking the reply",
+   "update": {
+    "steps": 8,
+    "trace": [
+     "self_check"
+    ],
+    "self_check_errors": []
+   }
+  },
+  {
+   "type": "done",
+   "case_id": "case-98c9e847",
+   "state": {
+    "case_id": "case-98c9e847",
+    "next": [],
+    "customer_id": "C014",
+    "narrative": "I don't recognise a 350.00 EUR payment to AirFly. I did not make it.",
+    "as_of": "2026-09-30",
+    "run_config": {
+     "brain": "llm",
+     "evidence_mode": "agent",
+     "kb_version": "v2",
+     "retrieval_mode": "bm25",
+     "router_path": null,
+     "provider": "openai",
+     "model": "openai/gpt-5.4-mini"
+    },
+    "claim": {
+     "merchant": "AirFly",
+     "amount": 350.0,
+     "currency": "EUR",
+     "transaction_date": null,
+     "claimed_correct_amount": null,
+     "contacted_merchant": false,
+     "refund_promised": false
+    },
+    "dispute_type": "unauthorized",
+    "type_confidence": 0.99,
+    "classified_by": "llm",
+    "router_prediction": {},
+    "evidence": [
+     {
+      "source": "ledger",
+      "kind": "matching_transaction",
+      "summary": "1 matching charge(s) of 350.0 EUR at AirFly on: 2026-09-20",
+      "data": {
+       "txn_id": "T140",
+       "customer_id": "C014",
+       "merchant": "AirFly",
+       "amount": 350.0,
+       "currency": "EUR",
+       "txn_date": "2026-09-20",
+       "channel": "online",
+       "n_matches": 1,
+       "all_dates": [
+        "2026-09-20"
+       ]
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "filing_window",
+      "summary": "10 days since transaction",
+      "data": {
+       "days_since_transaction": 10
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_duplicates",
+      "summary": "No identical charges posted within 3 days of each other (duplicate search returned nothing)",
+      "data": {
+       "window_days": 3
+      }
+     },
+     {
+      "source": "history",
+      "kind": "customer_history",
+      "summary": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}",
+      "data": {
+       "known_customer": true,
+       "account_age_days": 1733,
+       "disputes_last_12m": 0,
+       "unauthorized_disputes_last_12m": 0
+      }
+     },
+     {
+      "source": "ledger",
+      "kind": "no_merchant_refunds",
+      "summary": "No credit from this merchant has been posted to the account",
+      "data": {}
+     }
+    ],
+    "clauses": [
+     {
+      "clause_id": "POL-UNA-01",
+      "version": "v2",
+      "title": "Unauthorized transactions",
+      "text": "If the customer reports a transaction they did not make or authorize, the transaction amount is refunded as a provisional credit, the card is blocked and a replacement is issued.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.4568787035563906
+     },
+     {
+      "clause_id": "POL-UNA-02",
+      "version": "v2",
+      "title": "Repeated unauthorized claims",
+      "text": "If the customer has raised two or more unauthorized-transaction disputes in the last 12 months, the case is escalated to the fraud team instead of being refunded automatically.",
+      "applies_to": [
+       "unauthorized"
+      ],
+      "score": 3.388598677013066
+     },
+     {
+      "clause_id": "POL-GEN-01",
+      "version": "v2",
+      "title": "Scope of card disputes",
+      "text": "This policy covers disputes about card transactions on Northwind consumer accounts: duplicate charges, goods or services not received, unauthorized transactions, incorrect amounts and refunds not processed by the merchant. A dispute must reference a specific transaction on the customer's account.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-02",
+      "version": "v2",
+      "title": "Filing window",
+      "text": "A dispute must be raised within 90 days of the transaction date. Disputes raised after 90 days are rejected, except for unauthorized transactions on accounts flagged for fraud review, which are escalated.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-03",
+      "version": "v2",
+      "title": "Transaction must be identified",
+      "text": "If no transaction on the customer's account matches the merchant, amount or date described, the agent must ask the customer for the transaction date, merchant name and amount before any decision is made.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     },
+     {
+      "clause_id": "POL-GEN-04",
+      "version": "v2",
+      "title": "Human review threshold",
+      "text": "Any refund above 300 EUR, any case where the agent's confidence is low, and any case involving suspected fraud must be reviewed by a human dispute officer before the customer is notified.",
+      "applies_to": [
+       "all"
+      ],
+      "score": 0.0
+     }
+    ],
+    "kb_version": "v2",
+    "policy_params": {
+     "duplicate_window_days": 3.0,
+     "filing_window_days": 90.0,
+     "human_review_amount": 300.0,
+     "repeat_unauthorized_claims": 2.0
+    },
+    "evidence_mode": "agent",
+    "tool_calls": [
+     {
+      "tool": "find_transactions",
+      "args": {
+       "tool": "find_transactions",
+       "merchant": "AirFly",
+       "amount": 350.0,
+       "date": null,
+       "window_days": 45,
+       "query": null
+      },
+      "reason": "I need to confirm whether the charge exists on the account before applying unauthorized-dispute policy.",
+      "ok": true,
+      "observation": "1 charge(s): T140: 350.00 EUR AirFly on 2026-09-20 (online)"
+     },
+     {
+      "tool": "find_duplicates",
+      "args": {
+       "tool": "find_duplicates",
+       "merchant": "AirFly",
+       "amount": 350.0,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the disputed transaction; next I need to check whether there are duplicate AirFly charges that would undermine an unauthorized claim.",
+      "ok": true,
+      "observation": "No identical charges within 3 days of each other."
+     },
+     {
+      "tool": "search_policy",
+      "args": {
+       "tool": "search_policy",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": "unauthorized card dispute evidence requirements and decision criteria"
+      },
+      "reason": "We need policy criteria for an unauthorized card dispute before deciding if the evidence is sufficient to finish.",
+      "ok": true,
+      "observation": "POL-UNA-01: Unauthorized transactions; POL-UNA-02: Repeated unauthorized claims"
+     },
+     {
+      "tool": "customer_history",
+      "args": {
+       "tool": "customer_history",
+       "merchant": null,
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the transaction and duplicate check; the remaining key evidence for an unauthorized claim is customer account history and prior disputes.",
+      "ok": true,
+      "observation": "{'known_customer': True, 'account_age_days': 1733, 'disputes_last_12m': 0, 'unauthorized_disputes_last_12m': 0}"
+     },
+     {
+      "tool": "merchant_refunds",
+      "args": {
+       "tool": "merchant_refunds",
+       "merchant": "AirFly",
+       "amount": null,
+       "date": null,
+       "window_days": null,
+       "query": null
+      },
+      "reason": "We have the transaction, no duplicate pattern, customer history, and policy; next I need to check for any posted refund before finishing the evidence set.",
+      "ok": true,
+      "observation": "No credits from this merchant."
+     },
+     {
+      "tool": "finish",
+      "args": {},
+      "reason": "Enough evidence is already collected to decide an unauthorized dispute, so I will finish.",
+      "ok": true,
+      "observation": "finished"
+     }
+    ],
+    "coverage_fills": [],
+    "fallback_error": null,
+    "missing_evidence": [],
+    "decision": "refund",
+    "decision_confidence": 0.98,
+    "refund_amount": 350.0,
+    "rationale": "The claim is an unauthorized transaction and there is a matching charge for 350.00 EUR at AirFly within the 90-day filing window, so it falls under POL-UNA-01. However, the amount is above 300 EUR, which requires human review before the customer is notified under POL-GEN-04. | human: verified with the customer",
+    "cited_clauses": [
+     "POL-UNA-01",
+     "POL-GEN-04"
+    ],
+    "dropped_citations": [
+     "POL-GEN-02"
+    ],
+    "response_draft": "We\u2019ve reviewed your dispute and will issue a provisional credit of 350.00 EUR while the dispute is finalised. The transaction was found for AirFly, and your report was verified with you as unauthorized. Because this amount requires human review before customer notification, the case will now proceed through that step. We\u2019ll keep you updated on the outcome. (Policy reference: POL-UNA-01, POL-GEN-04)",
+    "needs_human": false,
+    "human_reason": "The claim is an unauthorized transaction and there is a matching charge for 350.00 EUR at AirFly within the 90-day filing window, so it falls under POL-UNA-01. However, the amount is above 300 EUR, which requires human review before the customer is notified under POL-GEN-04.",
+    "self_check_errors": [],
+    "draft_attempts": 1,
+    "steps": 8,
+    "trace": [
+     "intake",
+     "classify",
+     "gather_evidence",
+     "policy_check",
+     "decide",
+     "human_review",
+     "draft_response",
+     "self_check"
+    ],
+    "usage": {
+     "llm_calls": 10,
+     "input_tokens": 6130,
+     "output_tokens": 666,
+     "cost_usd": 0.007594499999999997
+    }
+   }
+  }
+ ]
+}
