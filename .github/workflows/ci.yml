@@ -1,0 +1,27 @@
+# Every push / PR: unit tests + the offline baseline evals with quality gates. No API keys, no model downloads.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.11"
+      - name: Install (core + dev; the torch router extra is not needed for tests)
+        run: uv sync
+      - name: Unit tests
+        run: uv run pytest -q
+      - name: Seed golden set, rule brain (must stay perfect)
+        run: uv run python eval/run_eval.py --brain rules --min-accuracy 1.0 --max-unsafe 0
+      - name: golden_v1, rule brain (regression gate on the deterministic baseline)
+        run: uv run python eval/run_eval.py --brain rules --golden eval/golden_v1.jsonl --min-accuracy 0.84 --max-unsafe 0
+      - name: Policy-change set under v1 and v2, rule brain
+        run: |
+          uv run python eval/run_eval.py --brain rules --golden eval/golden_policy_shift.jsonl --min-accuracy 0.67 --max-unsafe 0
+          uv run python eval/run_eval.py --brain rules --golden eval/golden_policy_shift_policy_v2.jsonl --min-accuracy 0.67 --max-unsafe 0

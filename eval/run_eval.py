@@ -199,6 +199,8 @@ def main() -> None:
     ap.add_argument("--effort", default=None, help='per-step reasoning effort, e.g. "decide=medium,action=medium"')
     ap.add_argument("--retrieval", choices=["bm25", "dense", "hybrid"], default=None, help="policy search mode")
     ap.add_argument("--router", default=None, help="path to a fine-tuned router (e.g. models/router)")
+    ap.add_argument("--min-accuracy", type=float, default=None, help="quality gate: exit 1 if decision accuracy is below this")
+    ap.add_argument("--max-unsafe", type=float, default=None, help="quality gate: exit 1 if unsafe refund rate is above this")
     args = ap.parse_args()
 
     if args.repeats > 1:
@@ -233,6 +235,13 @@ def main() -> None:
         print("\nDecision accuracy by scenario:")
         for k, (ok, n) in sorted(scen.items()):
             print(f"  {k:<34} {ok:>3}/{n:<3}")
+    from eval.failure_taxonomy import summarize as taxonomy
+
+    tax = taxonomy(report)
+    report["failure_taxonomy"] = tax
+    out.write_text(json.dumps(report, indent=2, default=str))
+    if tax["primary"]:
+        print("\nFailure taxonomy (primary cause per failed case): " + ", ".join(f"{k}={v}" for k, v in tax["primary"].items()))
     failures = [r for r in report["cases"] if not (r["decision_ok"] and r["refund_ok"]) or r["error"] or r["self_check_errors"]]
     if failures:
         print("\nFailures:")
@@ -240,6 +249,13 @@ def main() -> None:
             print(f"  {r['case_id']}: expected={r['expected_decision']} got={r['decision']} refund_ok={r['refund_ok']} "
                   f"errors={r['self_check_errors'] or r['error']} trace={'>'.join(r['trace'])}")
     print(f"\nReport: {out.relative_to(ROOT)}")
+    gate = []
+    if args.min_accuracy is not None and report["summary"]["decision_accuracy"] < args.min_accuracy:
+        gate.append(f"decision accuracy {report['summary']['decision_accuracy']:.3f} < {args.min_accuracy}")
+    if args.max_unsafe is not None and report["summary"]["unsafe_refund_rate"] > args.max_unsafe:
+        gate.append(f"unsafe refund rate {report['summary']['unsafe_refund_rate']:.3f} > {args.max_unsafe}")
+    if gate:
+        raise SystemExit("QUALITY GATE FAILED: " + "; ".join(gate))
 
 
 if __name__ == "__main__":

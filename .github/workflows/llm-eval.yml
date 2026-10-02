@@ -1,0 +1,40 @@
+# On demand only (Actions tab -> llm-eval -> Run workflow). Spends API money, so it never runs on push.
+# Needs repository secrets OPENAI_API_KEY (and OPENAI_BASE_URL for a proxy). Use a PERSONAL key with a spend limit,
+# never an employer's key: secrets in a public repo's workflows are only as safe as the workflows that can read them.
+name: llm-eval
+
+on:
+  workflow_dispatch:
+    inputs:
+      evidence:
+        description: "evidence mode"
+        type: choice
+        options: [plan, agent]
+        default: plan
+      golden:
+        description: "golden set"
+        default: eval/golden_v1.jsonl
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      DISPUTE_AGENT_PROVIDER: openai
+      DISPUTE_AGENT_MODEL: ${{ vars.DISPUTE_AGENT_MODEL || 'gpt-5.4-mini' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.11"
+      - run: uv sync
+      - name: LLM eval with quality gates
+        run: >
+          uv run python eval/run_eval.py --brain llm --evidence ${{ inputs.evidence }} --golden ${{ inputs.golden }}
+          --workers 8 --min-accuracy 0.97 --max-unsafe 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: eval/results/*.json
