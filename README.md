@@ -190,4 +190,4 @@ keys are ignored in public mode. All of this is covered by `tests/test_byok_secu
 ## Data
 
 Banking77 (PolyAI, CC-BY-4.0) for the router; LLM-written, human-reviewed complaints on a synthetic ledger; a fictional
-bank policy. No real customer or company data. [PLAN.md](PLAN.md) has the full build log and every finding.
+bank policy. No real customer or company data. [PLAN.md](PLAN.md) has the 3-day build plan, a day-by-day log and the lessons learnt.

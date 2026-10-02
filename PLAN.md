@@ -1,280 +1,103 @@
-# Dispute Resolution Agent: project plan
+# Dispute Resolution Agent: plan, log and lessons
 
-Portfolio project for NLP/DL and AI-agent Data Scientist roles. Target profile: state-driven AI agents built
-from scratch, advanced LLMs, continuously updated knowledge bases, real engineering and math rather than
-prompt engineering.
+Portfolio project for NLP / AI-agent Data Scientist roles. Built in **3 days (2026-10-01 → 2026-10-03)**, one phase at a
+time: each phase had a done-criterion, was reviewed by me, and only then did the next one start.
 
-## Goal
-
-Build a **state-driven agent that resolves card-payment disputes end to end**. It takes a customer complaint
-("charged twice", "never delivered", "I don't recognise this payment") and reaches one of four decisions:
-**REFUND / REQUEST_INFO / REJECT / ESCALATE**. Every decision comes with cited policy clauses, the evidence
-gathered through tools, and a drafted customer reply.
-
-The project has to show three things:
-1. **Agent engineering:** typed state, guarded transitions, tools, human-in-the-loop, persistence and resume.
-2. **Real ML / deep learning:** a fine-tuned transformer router, measured retrieval, and a knowledge base under version control.
-3. **Measurement:** a golden set, metrics, comparisons, a breakdown of failure types, and regression checks in CI.
-
-## Architecture
+**Goal:** a state-driven agent that resolves card-payment disputes end to end. A complaint ("charged twice", "never
+delivered", "I don't recognise this payment") ends in **REFUND / REQUEST_INFO / REJECT / ESCALATE**, with cited policy
+clauses, the evidence gathered through tools and a drafted customer reply. It has to show agent engineering, real ML,
+and measurement.
 
 ```
-intake → classify → gather_evidence ⇄ tools → policy_check → decide
-      → draft_response → self_check → END
-                             ↘ human_review (high value / low confidence / refusal / step budget)
+intake → classify → gather_evidence ⇄ tools → policy_check → decide → draft_response → self_check → END
+                                                                  ↘ human_review (money / confidence / conflict guards)
 ```
-
-- **State:** `CaseState` (Pydantic) holds the claim, dispute type, evidence, retrieved clauses, missing evidence,
-  the decision, the refund amount, a step counter, LLM usage and cost, and a trace.
-- **Guards in code, not in the prompt:**
-  - no REFUND without the required evidence;
-  - the refund amount is computed by a deterministic function, never by the LLM;
-  - a maximum step budget;
-  - a maximum number of self-check retries;
-  - escalation above a money threshold or below a confidence threshold.
-- **Tools:** ledger lookup (DuckDB), duplicate search, customer history, policy KB retrieval, refund calculator.
-- **Brains:** `RuleBrain` (a deterministic baseline that runs offline) and `LLMBrain` (Claude, structured outputs).
-  The same graph runs with either brain, so the evaluation can compare them directly.
-- **Knowledge base:** markdown policy clauses (`## POL-XXX-NN: title`) stored in version folders `kb/policies/v1`, `v2`, and so on.
-
-## Data
-- **Banking77** (PolyAI, CC-BY-4.0): ~13k real banking support messages with 77 intents, mapped to `DisputeType`
-  (`scripts/download_banking77.py` → `data/router_{train,test}.jsonl`). This is the router's training and test data.
-  *Note:* the CFPB complaint data was the first choice, but as of 2026 its public exports no longer include narratives (checked 2026-10-01).
-  *Gap:* Banking77 has no "goods not received" intent, so `not_received` needs synthetic examples (written or LLM-generated,
-  then reviewed by me).
-- **Golden-set narratives:** longer multi-fact complaints written by hand or drafted by an LLM and then edited, each paired with ledger rows.
-- **Synthetic ledger:** customers, transactions, refunds and prior disputes, generated to match the cases
-  (`scripts/generate_ledger.py`).
-- **Policy KB:** public card-network reason-code concepts plus a fictional bank's policy handbook
-  ("Northwind Bank"). Written by me. No real bank's internal policy.
-
-## Two-week plan (status checkboxes)
-
-### Day 0: scaffold (done by Claude)
-- [x] Repo layout, pyproject (uv), state schema, graph skeleton with guards and human interrupt
-- [x] Tools: ledger (DuckDB), KB (BM25), refund calculator
-- [x] RuleBrain baseline and LLMBrain (Claude structured outputs) with token and cost tracking
-- [x] Policy KB v1, fixture ledger, 12-case seed golden set, eval harness, 13 tests, interactive CLI
-- [x] Baseline: RuleBrain 100% on the seed set (expected, since the rules encode policy v1 and are the floor, not a result)
-- [x] First LLM run, `openai/gpt-5.4-mini` via LiteLLM: 11/12, then 12/12 after the negative-evidence fix ($0.003/case, ~4–6 s/case). Single run on an easy 12-case set; not a headline number
-
-### Days 1–2: data
-- [x] Download Banking77 and map intents → `DisputeType` (train 10,003 / test 3,080; ~84% `other`, which is realistic for a router)
-- [x] 300 synthetic `not_received` router messages (`data/synthetic/not_received.jsonl`, $0.04). **Reviewed: 300/300 approved**.
-      Report router metrics on this class separately (LLM-written, so it's an easier distribution than human text)
-- [x] Router splits (`scripts/make_router_splits.py` → `data/router/`): Banking77 train → 90/10 train/val **stratified on the 77
-      original intents**; official Banking77 test kept untouched; synthetic not_received 70/15/15; 7 exact-duplicate texts that
-      leaked across Banking77's own splits removed from train/val. Result: train 9,204 / val 1,047 / test 3,125
-- [x] Review tool `scripts/review.py` (auto-flags + per-scenario sample, verdicts saved into the files; rejected items are
-      excluded from evals and router splits). Review completed 2026-10-02
-- [x] Golden cases carry their own ledger rows (`ledger` field); the eval builds one DuckDB from them and runs in parallel
-- [x] `golden_v1.jsonl`: **204 cases, 17 scenarios × 12, labels correct by construction** (`scripts/generate_golden.py`).
-      The LLM writes narratives only, and automatic checks require the merchant and amounts. **Review pending (me)**: skim
-      narratives for faithfulness (e.g. "no contact" cases must not imply contact). **Reviewed: 203 approved, 1 rejected (excluded)**
-
-### Days 3–5: the agent core
-- [x] `gather_evidence` is a **bounded LLM tool-use loop** (`evidence.py`): typed actions through structured outputs (works with
-      any provider), a budget of 6 calls, repeat calls refused, errors fed back, plan fallback on model failure, and code-run
-      coverage fills recorded per case. Plan mode is now the same executor running a scripted call list
-- [x] Plan vs agent, 3 runs each on golden_v1 (203 cases). Ablation without coverage fills. Results in README and Findings
-- [x] SQLite checkpointer: `dispute-agent run / pending / show / resume` across processes; checkpoint types allow-listed;
-      restart test
-- [x] `--repeats N` in the eval: mean ± std, flaky cases, always-wrong cases
-- [x] Per-step `reasoning_effort` (`DISPUTE_AGENT_EFFORT="decide=medium,action=medium"`, eval `--effort`), measured on
-      golden_v1. The model's default turned out to be **no reasoning**. Adding reasoning made results *worse* (see Findings),
-      so the default stays: no effort parameter. Claude's `output_config.effort` is not wired (no Claude access to test it)
-- [x] Self-check: cited clauses must exist in the retrieved policy, and **the reply must match the decision**
-      (refund states the computed amount; reject / request_info / escalate must not promise money; request_info must ask for
-      something; escalate must say the case is being reviewed). A failed check triggers a redraft that is told what was wrong.
-      The first version had 5 false positives on real LLM replies; fixed, added as tests, and all 731 saved non-refund replies
-      re-scored clean
-
-### Bugs found in manual testing (2026-10-02, case-0aec9c90): fixed 2026-10-02
-- [x] `resume` used the default brain instead of the case's own. Fix: each case stores `run_config` (brain, model,
-      evidence mode, **resolved policy version**) and resume rebuilds from it. A case also can't switch policy version mid-case
-- [x] Usage was overwritten across processes. Fix: every graph step is metered and adds only its own usage to the case total
-      (verified: the resumed LLM case reports 10 calls / $0.0077 instead of 0 / $0)
-- [x] Citation relevance. Fix: `clause_applies()` conditions per clause; inapplicable citations are dropped and recorded
-      in `dropped_citations`. Measured on golden_v1 (plan, gpt-5.4-mini): the model over-cites in 76% of cases (mostly
-      general clauses); 0 of 278 dropped citations were expected clauses; citation recall 99.6% → 100%
-
-### Days 6–7: retrieval and a living knowledge base
-- [x] Hybrid retrieval: BM25 + embeddings (text-embedding-3-small via LiteLLM) fused with Reciprocal Rank Fusion
-      (`KnowledgeBase(mode=bm25|dense|hybrid)`, `DISPUTE_AGENT_RETRIEVAL`, eval `--retrieval`). Query set: 156 golden
-      complaints → their expected type-specific clauses (`eval/run_retrieval_eval.py`). Reranker not added: with type
-      filtering the right clause is already in the top 3 every time (see Findings)
-- [x] Policy thresholds moved from code into `Parameters:` lines of the policy itself; policy **v2** published
-      (90-day window, 300 EUR review threshold, 24 servicing clauses as distractors, `kb/policies/CHANGELOG.md`)
-- [x] Incremental re-indexing: content-hash embedding cache; v1 → v2 re-embeds 26 clauses and reuses 11 (tested)
-- [x] Policy-change eval: 40 human-reviewed boundary cases (`golden_policy_shift.jsonl`) + deterministic v2 relabelling
-      (`scripts/relabel_for_policy.py`). Same code, agent mode: **40/40 under v1 and 40/40 under v2, 32 decisions changed
-      exactly as the policy change requires, 8 controls unchanged**. Tests show the same case flips v1→v2
-- [x] Audit trail: every case records `kb_version`, the `policy_params` it used, the version of each clause, and its
-      `run_config` (a case keeps its policy version on resume)
-
-### Days 8–9: deep-learning router
-- [x] Fine-tuned **ModernBERT-base** (PyTorch + HF Trainer, Apple M5 Pro GPU via MPS, 9.1 min, 4 epochs) on 77 Banking77
-      intents + synthetic not_received (`scripts/train_router.py`; best epoch by validation macro-F1). Official test split:
-      **intent acc 93.2%, macro-F1 0.932** (in line with published Banking77 results); dispute type acc 98.9%, macro-F1 0.969.
-      Synthetic class reported separately (97.8% acc, n=45; it is LLM-written, so an easier distribution)
-- [x] Zero-shot LLM on the same test split (`eval/run_router_baseline.py`): dispute type acc 90.7%, macro-F1 0.757,
-      1.2 s/msg, $0.31 per 1k. Router: 98.9% / 0.969, 9 ms/msg, ~$0. **Caveat:** most of the gap is label-convention
-      disagreement (e.g. "lost or stolen card" is `other` in my mapping; the LLM says `unauthorized`), because the router
-      learned my mapping from data and the LLM never saw it. Fairer: report it as "reproduces the labelling scheme"
-- [x] Router in `classify` (`router.py`, `--router models/router`, threshold 0.9; LLM fallback below it). On the golden
-      complaints (domain shift: long, multi-sentence) the router alone is 96.7%, but at confidence ≥ 0.9 it was right 100% of
-      the time on 54% of cases. End to end on golden_v1 (plan mode): router decides 52% of classifications, type accuracy
-      stays 100%, LLM calls 4.01 → 3.49/case, cost −7%, latency 5.4 → 4.4 s. The 2 decision misses were known flaky cases
-      at the decide step, not routing errors
-
-### Days 10–12: evaluation and comparisons
-- [x] Metrics: decision accuracy, citation recall, tool calls per case, cost and latency per case, escalation rate (all in
-      every eval report, plus unsafe refunds, guard interventions, coverage fills, dropped citations, router share)
-- [x] Failure taxonomy (`eval/failure_taxonomy.py`, printed by every eval): one primary cause per failed case. Over all LLM
-      runs so far: **0 unsafe refunds with mini, 0 wrong types, 0 wrong amounts**; 57% of failures are the model
-      over-escalating (safe direction)
-- [x] Comparisons on golden_v1 (203 cases): rules 84.2% · nano 87.2% (after fix; see Findings) · **mini 100% ± 0 over 3 runs,
-      $0.0026, 4.1 s** · mini + router 100% ± 0, $0.0024, 3.8 s · gpt-5.5 100%, $0.023 (9×), 8.5 s · mini agent bm25 100%
-      vs hybrid 100% (no difference, as the retrieval eval predicted). `--per-scenario N` probes cost before full runs
-- [x] LLM judge for reply quality (`eval/judge/`), **validated against my own labels**: 40 replies (25 real + 15 with defects
-      injected by code, blind), 5 yes/no questions, adjudication of disagreements (I re-checked 4, all my misses).
-      "OK to send" with a 3-vote majority: judge v1 82% agreement / kappa 0.65; v2 (+ today's date, policy text and values,
-      ledger-derived day counts) 85% / 0.69, facts kappa 0.47 → 0.68. Both judges caught 15/15 and 14/15 injected defects;
-      on my first pass I caught 11/15 (I missed every wrong merchant). Weak spots: tone (kappa 0.13–0.24), arithmetic
-      (missed "40 days" when it was 30), run-to-run variance. v2 was tuned on the same 40 replies, so its scores are optimistic.
-      Verdict: an automated screen with human spot checks, not the final word
-- [x] GitHub Actions: `ci.yml` (tests + rule-brain evals with `--min-accuracy` / `--max-unsafe` gates on every push, green);
-      `llm-eval.yml` on demand only, personal key via secrets (never the employer key)
-
-### Reply-quality fixes (from the labelling findings, 2026-10-02)
-- [x] `replies.py`: the writer gets **facts computed by code** (day counts, refund amount, what the customer already gave)
-      and decision-specific guidance (not found: say so and ask only for the date or a statement screenshot; reject:
-      acknowledge and give a next step, e.g. "cancel the subscription with the merchant"; refund: "provisional credit";
-      escalate: no outcome or timeline promised). Rule templates follow the same guidance
-- [x] New self-checks: every "N days" in a reply must equal a computed or policy value; a not-found reply must say the
-      charge was not found. Tests use the real failing replies ("40 days", "couldn’t" with a typographic apostrophe)
-- [x] Measured with the validated judge (v2, 3 votes) on the same 203 cases, old vs new writer: "OK to send" 72% → 76%,
-      request_info facts 0.71 → 0.92 (no more re-asking), clarity 0.98 → 1.00, decisions unchanged (99.5%, 0 unsafe).
-      Most remaining request_info "fails" are judge false alarms: it calls POL-NR-02's own 15-day instruction "invented"
-
-### Days 13–14: presentation
-- [x] README rewritten: demo GIF, headline results, Mermaid architecture diagram (validated with mermaid-cli), design
-      decisions, all results from the latest runs, limitations
-- [x] **Streamlit demo app** (`app/`, `uv run streamlit run app/main.py`), reusing the agent code directly:
-  - [x] **Customer view:** demo accounts with transactions, complaint box, live step-by-step trace with tool calls
-  - [x] **Dispute officer view:** queue from the SQLite checkpoints, evidence, guard or agent reason, verdict form that
-        resumes the case with its stored config
-  - [x] **Case trace:** tool calls (args, reasons, observations), evidence, policy version and parameters, cited and
-        dropped clauses, guards, reply checks, cost, raw state
-  - [x] **Policy switch:** same complaint under v1 and v2 side by side (boundary demo customers C013 / C014)
-  - [x] **Results page:** Altair charts (validated palette, single-series bars, value labels, tooltips) and tables from a
-        committed metrics snapshot (`app/build_metrics.py` reads eval reports)
-  - [x] Sidebar settings: brain, evidence mode, policy version, router; LLM options disabled without a key
-  - [x] **Recorded replays:** 7 real LLM agent runs (`app/record_replays.py`), including full pause / review / resume
-        flows, played back without an API key
-  - [x] Tests: 5 core + 6 headless UI tests (Streamlit AppTest); works offline with the rule brain
-  - [x] Public-hosting decision: Streamlit Community Cloud; rule brain + recorded replays without a key, plus
-        **bring-your-own-key** for live LLM runs (session-only key, official endpoints, never stored or logged, per-session
-        case isolation, server env keys ignored in public mode). `requirements.txt` (no torch), `.streamlit/config.toml`
-        (generic error details, viewer toolbar). Cloud install simulated in a fresh venv: public mode works
-  - [x] **Deployed** on Streamlit Community Cloud: https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app
-        Checked live: public mode, rule-brain case, results charts, per-session isolation (a new session sees no cases)
-  - [ ] Smoke-test the live LLM agent with a **personal** key (me)
-- [x] Demo GIF of the app (`docs/demo.gif`, recorded LLM run: investigation → guard → officer → resume → reply)
-- [x] Resume bullet with the live demo link (below)
-
-Resume bullet (draft, measured numbers only):
-> **Dispute Resolution Agent** (Python, LangGraph, PyTorch, OpenAI/Claude APIs, Streamlit) · github.com/nickkirpa/dispute-resolution-agent · [live demo](https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app)
-> Built a state-driven LLM agent that resolves card-payment disputes end to end: LLM-chosen tool calls under a budget, a
-> versioned policy knowledge base with hybrid retrieval, human-in-the-loop review with durable checkpoints, and code-
-> enforced money guards. On 203 human-reviewed cases: 100% decision accuracy over 3 runs, 0% unsafe refunds, $0.0024/case.
-> Fine-tuned a ModernBERT router (93.2% on Banking77, 9 ms vs 1.2 s for the LLM) and validated an LLM judge against human
-> labels (Cohen's kappa 0.69). A policy update changed exactly the 32 required decisions with no code change.
-
-## Findings log
-Write down what broke and what fixed it. This is README and interview material.
-
-- **2026-10-01: negative evidence.** G02 (a monthly subscription reported as a "duplicate"): gpt-5.4-mini proposed REFUND
-  under POL-DUP-01. The money guard caught it (refund amount computed to 0, so the case escalated instead of paying out). Root cause:
-  the evidence listed "2 matching charges" without both dates, and nothing said "no duplicates found". After adding all matching dates
-  and explicit `no_duplicates` / `no_merchant_refunds` evidence, the case was decided correctly. Lesson: tools should report what they
-  did *not* find. Otherwise the model fills the gap.
-- **2026-10-01: dates without a year.** "dated 7 September": the model filled in 2024, decide saw a ledger mismatch and rejected.
-  Fix: give extraction today's date, plus deterministic `normalize_claim_date` (future or >1y old moves to the most recent past occurrence).
-- **2026-10-01: an unsafe payout the money guard missed.** For refund_not_processed, the model refunded although the ledger showed
-  the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
-  didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
-  On the next run the guard caught the same pattern on a different case (V1-0196).
-- **2026-10-02: fixing replies with a judge in the loop.** Using the validated judge as a before/after metric worked,
-  but its known bias (over-strict on "promises") hides part of the gain: it flagged the policy's own 15-day wording as
-  invented. A judge is a relative measure: compare versions under the same judge, and read its reasons before
-  trusting a drop. Also: a deterministic check failed on "couldn’t" (U+2019), so normalise typography in text checks.
-- **2026-10-02: validating the LLM judge.** The surprise was on the human side: on a first pass I missed all 3 replies
-  with a swapped merchant name, and one invented "24-hour guarantee". The judge caught them. After adjudication we
-  agreed on all 15 defects. The judge's own failures were systematic: (1) false alarms when it lacked context (it called
-  the policy's "provisional credit" an invented promise); fixed by giving it the policy text. (2) Blind to a wrong day
-  count even when given the correct number. (3) Lenient on tone. (4) Different verdicts across runs, so majority-vote it.
-  Lesson: validate the judge like a model (labels, kappa, per-defect recall), and validate the human labels too.
-- **2026-10-02: reply-quality findings from labelling** (none are caught by the code checks; candidates for the reply
-  prompt): request_info replies re-ask for details the customer already gave and don't say the charge wasn't found;
-  rejections lack empathy and a next step (e.g. "cancel the subscription with the merchant", POL-DUP-02); a refund
-  reply omitted "provisional"; one real reply stated "40 days" for a 30-day gap (fix: give the writer computed facts).
-- **2026-10-02: the cheap model found a guard gap.** gpt-5.4-nano refunded 2 "unauthorized" claims from customers with
-  2+ prior fraud claims (POL-UNA-02 says escalate). mini and gpt-5.5 never made that mistake, so the gap stayed invisible.
-  An audit of every refund-forbidding rule found it was the **only** rule without a code guard. Added the guard, with the
-  threshold as a policy parameter (`repeat_unauthorized_claims=2`). nano rerun: 0 unsafe refunds. Lesson: test guards
-  with a weaker model too, because a strong model hides missing guards by not needing them.
-- **2026-10-02: router, honest framing.** The fine-tuned model is excellent at what it was trained for (93.2% on
-  Banking77) and fast (9 ms vs 1.2 s), but (1) a large part of its lead over the LLM is my own label conventions, and
-  (2) on longer, unfamiliar complaints it drops to 96.7%. Calibrated confidence makes it useful anyway: a 0.9 threshold
-  keeps only the cases it gets right. Savings are modest (−13% LLM calls), because classification is 1 of ~4 calls.
-  The bigger lever would be routing the extraction step, or letting the router skip the LLM entirely on simple cases.
-- **2026-10-02: Metal (MPS) and threads.** 8 eval threads using the router crashed the process inside Apple's GPU
-  driver (`MTLCommandBuffer` assertion), even with a lock around inference. Fix: one dedicated GPU thread owns all
-  model loading and inference; other threads submit requests to it.
-- **2026-10-02: policy update without code change.** Moving thresholds into the policy documents was the prerequisite:
-  before that, publishing "90 days" in the text would have changed nothing, because code still checked 120. After it,
-  the agent applied v2 on the policy-change set with 40/40 correct and 32/32 expected flips. The LLM read the new
-  numbers from the clause text, and the code guards read them from the clause parameters, so both agree by construction.
-- **2026-10-02: retrieval.** Filtered by dispute type (how the agent searches), every mode puts the right clause in the
-  top 3 (100%). Recall@1 is only ~66% because sibling clauses compete (refund vs "not a duplicate", refund vs "contact
-  the shop first"), and the complaint text can't settle that; the evidence does, which is why code checks
-  applicability. Unfiltered (37 clauses compete), embeddings matter: recall@3 bm25 0.66 → dense 0.79 / hybrid 0.80,
-  MRR 0.54 → 0.62 / 0.64. A hash "embedder" is far worse than BM25 (0.39), so quality needs real embeddings.
-- **2026-10-02: more reasoning made the agent worse here.** gpt-5.4-mini's default is *no* reasoning (0 reasoning tokens;
-  `minimal` is rejected by LiteLLM). One run each on golden_v1:
-  plan/none 99.5% · plan/decide=medium 98.0% · plan/all=low 95.6% · agent/none 100% · agent/decide+action=medium 99.0%.
-  Every extra error is the same pattern: "I don't recognise this payment" (normal amount, policy says refund) escalated
-  by the model's own choice. With more reasoning the model becomes over-cautious about fraud and overrides the policy.
-  In agent mode, medium effort also made the agent **skip more checks itself** (code coverage fills 25% → 46%) at +86% cost
-  ($0.013 vs $0.007/case) and +59% latency (20.5 s vs 12.9 s). All errors were safe (0 unsafe refunds). Lesson: more
-  reasoning is not free accuracy. For a policy-following task it can make the model second-guess the rules. Measure it.
-- **2026-10-02: the reply check had false positives.** "please contact GadgetHub first… send us the details" was flagged as
-  "not asking for info", and "we can't provide a refund or provisional credit" as "promising money". Fixed with positive-
-  phrasing patterns plus regression tests from the real replies. Lesson: a checker needs its own eval, or it quietly
-  blocks good outputs.
-- **2026-10-02: agent vs plan.** Plan mode (scripted tools): 99.0% decisions, stable across 3 runs, with 3 flaky cases.
-  Agent mode: 100% in all 3 runs, 0 flaky, but **2.7× the cost** ($0.0074 vs $0.0027) and **2.4× the latency** (11.9 s vs 4.9 s),
-  and 24% of cases needed a code coverage fill. Ablation without fills: **94.6%**. The agent skipped the transaction search
-  (it went straight to `find_duplicates`) or skipped the duplicate check. **Every** no-fill failure was safe (request_info or
-  escalate, 0 unsafe refunds). Lesson: let the agent explore, but code must guarantee the checks that policy depends on.
-  Open question: is +1 pp worth 2.7× cost? On this easy synthetic set, the plan wins on cost. Agent mode should pay off on
-  messier cases (multiple candidate transactions, ambiguous merchants), which golden v2 should add.
-- **2026-10-01: rule baseline on free text** drops to 84% (it misses "I contacted BookNest" and "charged X, agreed Y" phrasings).
-  A good illustration of why the LLM brain exists.
-- **2026-10-01: CFPB narratives are gone** from public exports, so the router uses Banking77 (see Data).
 
 ## Rules
-- **Honest numbers only.** Every metric in the README and on the resume must come from `eval/` output that can be reproduced.
-- **No company data.** Nothing from any employer. Use public and synthetic data only.
-- **Deterministic first.** If code can do it reliably (amounts, dates, thresholds), code does it. The LLM handles
-  language understanding and judgement only.
-- Each step should keep `uv run pytest` green and `uv run python eval/run_eval.py --brain rules` runnable.
 
-## Resume bullet (draft; fill in after measuring)
-> **Dispute Resolution Agent: Python · LangGraph · PyTorch · Claude**
-> A state-driven agent that resolves card disputes end to end: classify, gather evidence through tools, check policy,
-> then decide or escalate. It has guarded transitions, human-in-the-loop checkpoints and retrieval over a versioned policy KB.
-> A fine-tuned ModernBERT router cut LLM cost by X% at equal accuracy. A 200-case golden set tracks decision
-> accuracy, citation correctness, cost and latency in CI. GitHub
+- **Honest numbers only:** every metric in the README and resume comes from reproducible `eval/` output.
+- **No company data:** public (Banking77) and synthetic data only; personal GitHub and personal API keys only.
+- **Deterministic first:** amounts, dates and thresholds are computed by code. The LLM handles language and judgement.
+- **Always green:** each phase keeps `uv run pytest` passing and the rule-brain eval runnable.
+
+## Plan
+
+| # | Phase | Done when | Status |
+|---|---|---|---|
+| 1 | **Scaffold** | Typed `CaseState`, graph with guards and human interrupt, tools (DuckDB ledger, BM25 KB, refund calculator), `RuleBrain` + `LLMBrain`, policy KB v1, eval harness, CLI, tests | ✅ Day 1 |
+| 2 | **Data** | Banking77 mapped to dispute types; synthetic `not_received` class; leak-free stratified router splits; 204-case golden set correct by construction; **every generated item reviewed by me** | ✅ Day 1 |
+| 3 | **Agent core** | Bounded LLM tool-use loop for evidence; SQLite checkpoints with resume across processes; repeated evals (mean ± std); per-step reasoning effort measured; self-check (citations exist, reply matches decision) | ✅ Day 1–2 |
+| 4 | **Living knowledge base** | Thresholds live in the policy text (`Parameters:`); policy v2 published; hybrid BM25 + embeddings (RRF); incremental re-indexing; policy-change eval; full audit trail per case | ✅ Day 2 |
+| 5 | **Deep-learning router** | ModernBERT fine-tuned locally; compared with zero-shot LLM; wired into `classify` with a confidence threshold and LLM fallback; end-to-end cost/latency measured | ✅ Day 2 |
+| 6 | **Evaluation** | Metrics in every report; failure taxonomy; model / router / retrieval comparisons; LLM judge validated against my labels (kappa); CI with quality gates | ✅ Day 2 |
+| 7 | **Presentation** | README with results and architecture; Streamlit app (customer, review queue, trace, policy switch, results); recorded replays; public hosting with bring-your-own-key; demo GIF + MP4 | ✅ Day 3 |
+| 8 | **Smoke test** | Live LLM agent on the hosted app with a personal key | ⬜ me |
+
+## Log
+
+### Day 1 (2026-10-01): scaffold, data, agent loop
+- Scaffolded the repo (uv, LangGraph, Pydantic state, guards in code, 13 tests). First LLM run: 12/12 on the seed set.
+- CFPB exports no longer contain narratives, so switched to **Banking77** (13k real messages, 77 intents → dispute
+  types) + 300 synthetic `not_received` messages (reviewed 300/300).
+- Router splits stratified on the 77 intents; removed 7 duplicates leaking across Banking77's own splits
+  (train 9,204 / val 1,047 / test 3,125).
+- **Golden set:** 204 cases, 17 scenarios; labels come from construction, the LLM only writes narratives. Reviewed with
+  `scripts/review.py`: 203 approved, 1 rejected.
+- Evidence gathering became a **bounded tool-use loop** (6-call budget, repeat calls refused, plan fallback, code
+  coverage fills). Durable cases (SQLite) and `--repeats N` evals.
+
+### Day 2 (2026-10-02): knowledge base, router, evaluation
+- Self-check: cited clauses must exist, the reply must match the decision; redraft on failure.
+- Fixed 3 bugs from manual testing: resume used the wrong brain, usage totals were overwritten, irrelevant citations.
+- **Policy v2** (90-day window, 300 EUR review threshold) with no code change: 40/40 correct under v1 and v2,
+  exactly the 32 expected decision flips. Hybrid retrieval with an embedding cache (v1 → v2 re-embeds 26, reuses 11).
+- **ModernBERT router** (9 min on an M5 Pro): Banking77 intent accuracy 93.2%, dispute type 98.9% at 9 ms vs the LLM's
+  90.7% at 1.2 s. In the agent: decides 52% of classifications, cost −7%, accuracy unchanged.
+- **Comparisons** on 203 cases: rules 84.2% · gpt-5.4-nano 87.2% · **gpt-5.4-mini 100% ± 0 (3 runs), $0.0024/case with
+  router** · gpt-5.5 100% at 9× the cost. 0 unsafe refunds everywhere after the POL-UNA-02 guard.
+- **LLM judge** validated on 40 replies against my labels: 85% agreement on "OK to send", kappa 0.69. Used it to measure
+  a reply-writer fix (computed facts, decision-specific guidance): "OK to send" 72% → 76%.
+- CI: tests + rule-brain evals with accuracy / unsafe-refund gates on every push; LLM eval on demand.
+
+### Day 3 (2026-10-03): app, hosting, demo
+- Streamlit app: file a dispute and watch the trace live, review queue that resumes paused cases, case trace,
+  policy v1 vs v2 side by side, results charts. 7 recorded LLM runs play without a key.
+- Hosted on Streamlit Community Cloud in **public mode**: visitor brings their own key (session only, official
+  endpoints, never stored), per-session case isolation, server keys ignored. 5 security tests.
+- Fixed a key-entry crash found on the hosted app (Streamlit widget state set after drawing → `on_click` callbacks,
+  regression test). Officer's refund amount now pre-filled with what policy would pay.
+- Demo recorded by a Playwright script (`scripts/record_demo.py`): 2x resolution, paced scrolling, ≥5 s holds.
+- Final state: 60 tests green, CI green, live demo: https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app
+
+## Lessons learnt
+
+1. **Tools must report what they did not find.** Without explicit `no_duplicates` / `no_merchant_refunds` evidence,
+   the model filled the gap and proposed a refund for a monthly subscription.
+2. **Guards belong in code, and a weak model is how you test them.** gpt-5.4-nano refunded repeat fraud claimants;
+   mini and gpt-5.5 never did, which hid that POL-UNA-02 was the only refund-forbidding rule without a code guard.
+3. **Let the agent explore, but guarantee the checks policy depends on.** Agent mode hit 100% vs the plan's 99%, at
+   2.7× cost and 2.4× latency; without code coverage fills it fell to 94.6% (all failures safe).
+4. **More reasoning is not free accuracy.** Adding reasoning effort to gpt-5.4-mini *lowered* accuracy (99.5% → 95.6% at
+   worst): it became over-cautious about fraud and overrode the policy, at +86% cost.
+5. **Validate the judge like a model, and validate the human too.** The judge caught swapped merchant names I missed;
+   it was blind to wrong day counts and lenient on tone. Use it as a relative screen with spot checks.
+6. **Checkers need their own eval.** The reply self-check had false positives on real replies, and a regex missed
+   "couldn’t" (typographic apostrophe). Regression tests come from real outputs.
+7. **A fine-tuned router's lead is partly your own labels.** Much of the 98.9% vs 90.7% gap is label-convention
+   disagreement; the calibrated 0.9 threshold is what makes it useful on longer, unfamiliar complaints.
+8. **Policy as data makes updates code-free.** Once thresholds moved into the policy documents, the LLM read them from
+   the text and the guards from the parameters, so v2 applied correctly with no code change.
+9. **Dates and money never go to the LLM.** "7 September" became 2024; refund amounts and day counts are computed.
+10. **Platform details bite late.** Apple MPS crashed with 8 threads (one GPU thread fixed it); Streamlit widget state
+    and hosted-mode differences only showed up when a real user clicked through.
+
+## Resume bullet
+
+> **Dispute Resolution Agent** (Python, LangGraph, PyTorch, OpenAI/Claude APIs, Streamlit) ·
+> [github.com/nickkirpa/dispute-resolution-agent](https://github.com/nickkirpa/dispute-resolution-agent) ·
+> [live demo](https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app)
+> State-driven LLM agent that resolves card-payment disputes end to end: LLM-chosen tool calls under a budget, a
+> versioned policy knowledge base with hybrid retrieval, human-in-the-loop review with durable checkpoints, and
+> code-enforced money guards. On 203 human-reviewed cases: 100% decision accuracy over 3 runs, 0% unsafe refunds,
+> $0.0024/case. Fine-tuned a ModernBERT router (93.2% on Banking77, 9 ms vs 1.2 s for the LLM) and validated an LLM
+> judge against human labels (kappa 0.69). A policy update changed exactly the 32 required decisions with no code change.
