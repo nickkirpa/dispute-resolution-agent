@@ -6,6 +6,12 @@ pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _local_mode(monkeypatch):
+    """These tests exercise the app as run locally (shared case list); public mode is tested in test_byok_security."""
+    monkeypatch.setenv("DISPUTE_AGENT_PUBLIC", "0")
+
+
 def _page(view: str, db: str):
     def script(view, db):
         import sys
