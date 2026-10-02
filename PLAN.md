@@ -174,8 +174,12 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
   - [x] **Recorded replays:** 7 real LLM agent runs (`app/record_replays.py`), including full pause / review / resume
         flows, played back without an API key
   - [x] Tests: 5 core + 6 headless UI tests (Streamlit AppTest); works offline with the rule brain
-  - [ ] **Public hosting** (Streamlit Community Cloud or Hugging Face Spaces). **Decision pending (me):** rule brain plus
-        recorded replays (no key, $0) vs a personal key with a spend limit. Never the employer key
+  - [x] Public-hosting decision: Streamlit Community Cloud; rule brain + recorded replays without a key, plus
+        **bring-your-own-key** for live LLM runs (session-only key, official endpoints, never stored or logged, per-session
+        case isolation, server env keys ignored in public mode). `requirements.txt` (no torch), `.streamlit/config.toml`
+        (generic error details, viewer toolbar). Cloud install simulated in a fresh venv: public mode works
+  - [ ] **Deploy** on share.streamlit.io (me: GitHub login, New app → repo / main / `app/main.py`, Python 3.11+), then
+        smoke-test with a personal key
 - [x] Demo GIF of the app (`docs/demo.gif`, recorded LLM run: investigation → guard → officer → resume → reply)
 - [ ] Resume bullet: draft below; **add the live demo link once hosted**
 

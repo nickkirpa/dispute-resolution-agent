@@ -160,6 +160,15 @@ uv run python eval/run_eval.py --brain llm --evidence agent --golden eval/golden
 
 CI runs the tests and the offline evals on every push, with quality gates (minimum accuracy, zero unsafe refunds).
 
+### Hosted demo and bring-your-own-key
+
+The hosted demo (Streamlit Community Cloud, `requirements.txt`, entry point `app/main.py`) runs in **public mode** (no `.env`):
+the rule brain and the recorded LLM runs work without any key, and visitors can paste **their own** OpenAI or Anthropic
+key to run the live LLM agent. The key is kept only in that browser session's server-side state and sent directly to the
+provider's official endpoint. It is never put in environment variables or shared caches, never stored with the case
+or in the checkpoint database, and masked in error messages. Each visitor sees only their own cases. Server environment
+keys are ignored in public mode. All of this is covered by `tests/test_byok_security.py`.
+
 ## Limitations
 
 - **Synthetic data.** Complaints are LLM-written from code-built scenarios and human-reviewed; the ledger and the bank's

@@ -218,8 +218,22 @@ class OpenAIBrain(PromptBrain):
         )
 
 
-def make_llm_brain(settings) -> PromptBrain:
-    """Provider switch used by the CLI, the eval harness and scripts/check_llm.py."""
+def make_llm_brain(settings, api_key: str | None = None) -> PromptBrain:
+    """Provider switch used by the CLI, the eval harness, scripts/check_llm.py and the app.
+
+    api_key: an explicit key (e.g. a visitor's own key in the hosted demo). When given, the client is built with it and
+    the default endpoint, ignoring environment variables, so one visitor's key never comes from or goes to process-wide
+    state. When None, the SDKs read their usual environment variables (local use).
+    """
     if settings.provider == "openai":
-        return OpenAIBrain(model=settings.model, reasoning_effort=settings.reasoning_effort, effort_by_step=settings.effort_by_step)
-    return LLMBrain(model=settings.model, price_model=settings.price_model)
+        client = None
+        if api_key:
+            import openai
+
+            client = openai.OpenAI(api_key=api_key, base_url="https://api.openai.com/v1")
+        return OpenAIBrain(model=settings.model, client=client, reasoning_effort=settings.reasoning_effort,
+                           effort_by_step=settings.effort_by_step)
+    client = None
+    if api_key:
+        client = anthropic.Anthropic(api_key=api_key, base_url="https://api.anthropic.com")
+    return LLMBrain(model=settings.model, client=client, price_model=settings.price_model)

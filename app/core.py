@@ -89,6 +89,20 @@ class AppConfig:
         return asdict(self)
 
 
+def public_mode() -> bool:
+    """Hosted demo: visitors bring their own key, server env keys are ignored, cases are isolated per session.
+    Default: public unless a local .env exists. Override with DISPUTE_AGENT_PUBLIC=1/0."""
+    flag = os.getenv("DISPUTE_AGENT_PUBLIC")
+    return flag == "1" if flag in ("0", "1") else not (ROOT / ".env").exists()
+
+
+def mask(text: str, secret: str | None) -> str:
+    """Remove a secret from text shown to the user (error messages can echo request details)."""
+    if not secret:
+        return text
+    return text.replace(secret, "***").replace(secret[-6:], "***") if len(secret) > 6 else text.replace(secret, "***")
+
+
 def llm_available(provider: str | None = None) -> bool:
     provider = provider or os.getenv("DISPUTE_AGENT_PROVIDER", "anthropic")
     return bool(os.getenv("OPENAI_API_KEY") if provider == "openai" else os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
@@ -115,7 +129,9 @@ def connect(db: Path | None = None) -> sqlite3.Connection:
     return sqlite3.connect(db, check_same_thread=False)
 
 
-def build_agent(config: AppConfig | dict, conn: sqlite3.Connection, human_in_loop: bool = True):
+def build_agent(config: AppConfig | dict, conn: sqlite3.Connection, human_in_loop: bool = True, api_key: str | None = None):
+    """api_key: a visitor's own key (public demo). It is handed to the SDK client only: never stored in the config,
+    the case state or the checkpoints."""
     cfg = config if isinstance(config, dict) else config.run_config()
     settings = Settings(provider=cfg["provider"], model=cfg["model"], evidence_mode=cfg["evidence_mode"],
                         kb_version=cfg["kb_version"], retrieval_mode=cfg.get("retrieval_mode", "bm25"),
@@ -126,7 +142,7 @@ def build_agent(config: AppConfig | dict, conn: sqlite3.Connection, human_in_loo
     else:
         from dispute_agent.llm_brain import make_llm_brain
 
-        brain = make_llm_brain(settings)
+        brain = make_llm_brain(settings, api_key=api_key)
     deps = Deps(brain=brain, ledger=ledger, kb=build_kb(settings), settings=settings, human_in_loop=human_in_loop)
     serde = JsonPlusSerializer(allowed_msgpack_modules=CHECKPOINT_TYPES)
     return build_graph(deps, checkpointer=SqliteSaver(conn, serde=serde))

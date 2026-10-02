@@ -1,0 +1,14 @@
+# Production settings for the hosted demo (Streamlit Community Cloud).
+# Locally, override with e.g. STREAMLIT_CLIENT_SHOW_ERROR_DETAILS=full uv run streamlit run app/main.py
+
+[client]
+# Visitors see exception types and generic messages only; full messages and tracebacks go to the server log.
+showErrorDetails = "type"
+# Hide developer options (rerun, clear cache, deploy) from visitors.
+toolbarMode = "viewer"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

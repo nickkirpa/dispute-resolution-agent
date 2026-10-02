@@ -11,7 +11,7 @@ def render() -> None:
     st.caption("The full audit trail of a case: steps, tool calls, evidence, policy version, citations, guards and cost.")
     ui.sidebar()
     probe = ui.agent_for(core.AppConfig().run_config())
-    ids = core.list_cases(ui.conn())
+    ids = ui.visible_cases(core.list_cases(ui.conn()))
     if not ids:
         st.info("No cases yet. File a dispute first.")
         return

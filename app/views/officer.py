@@ -11,7 +11,7 @@ def render() -> None:
                "Your verdict resumes the case from its saved checkpoint, with the brain and policy version it started with.")
     ui.sidebar()
     probe = ui.agent_for(core.AppConfig().run_config())  # any agent can read the shared checkpoints
-    queue = core.pending_cases(probe, ui.conn())
+    queue = [q for q in core.pending_cases(probe, ui.conn()) if q["case_id"] in ui.visible_cases([q["case_id"]])]
     if not queue:
         st.success("Nothing waiting for review. Try customer C006 (899 EUR) or C007 (repeat claims) on the first page.")
         return
@@ -39,6 +39,10 @@ def render() -> None:
             submitted = st.form_submit_button("Submit verdict", type="primary")
     if submitted:
         verdict = {"decision": decision, "note": note} | ({"refund_amount": amount} if decision == "refund" else {})
-        agent = ui.agent_for(core.stored_config(probe, case_id) or core.AppConfig().run_config())
+        stored = core.stored_config(probe, case_id) or core.AppConfig().run_config()
+        if stored.get("brain") == "llm" and core.public_mode() and not ui.session_key():
+            st.caption("This case was started with an LLM; without your key in this session the reply is written by the rule brain.")
+            stored = dict(stored, brain="rules", evidence_mode="plan")
+        agent = ui.agent_for(stored)
         last = ui.render_events(core.resume_events(agent, case_id, verdict))
         ui.show_outcome(last)

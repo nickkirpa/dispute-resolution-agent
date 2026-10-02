@@ -16,36 +16,103 @@ DECISION_STYLE = {"refund": ("Refund", "green"), "request_info": ("Ask the custo
 ROUTER_DIR = core.ROOT / "models" / "router"
 
 
+BYOK_MODELS = {"openai": ["gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.5"],
+               "anthropic": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"]}
+
+
 @st.cache_resource
 def _conn(db: str):
     return core.connect(Path(db))
 
 
 @st.cache_resource(show_spinner="Loading the agent…")
-def _agent(config_json: str, human_in_loop: bool, db: str):
+def _shared_agent(config_json: str, human_in_loop: bool, db: str):
+    """Agents WITHOUT a visitor key (rule brain, or the server's own env key locally): safe to share across sessions."""
     return core.build_agent(json.loads(config_json), _conn(db), human_in_loop=human_in_loop)
 
 
+def session_key() -> str | None:
+    """The visitor's own API key: kept in this browser session's server-side state only."""
+    byok = st.session_state.get("byok") or {}
+    return byok.get("key") or None
+
+
 def agent_for(config: dict, human_in_loop: bool = True):
-    return _agent(json.dumps(config, sort_keys=True), human_in_loop, str(core.DB))
+    key = session_key() if config.get("brain") == "llm" else None
+    if not key:
+        return _shared_agent(json.dumps(config, sort_keys=True), human_in_loop, str(core.DB))
+    # Agents holding a visitor key live in that visitor's session only, never in a process-wide cache.
+    agents = st.session_state.setdefault("_session_agents", {})
+    cache_key = (json.dumps(config, sort_keys=True), human_in_loop)
+    if cache_key not in agents:
+        agents[cache_key] = core.build_agent(config, _conn(str(core.DB)), human_in_loop=human_in_loop, api_key=key)
+    return agents[cache_key]
 
 
 def conn():
     return _conn(str(core.DB))
 
 
+def remember_case(case_id: str) -> None:
+    mine = st.session_state.setdefault("my_cases", [])
+    if case_id not in mine:
+        mine.append(case_id)
+
+
+def visible_cases(ids: list[str]) -> list[str]:
+    """Public demo: each visitor only sees cases they created (complaints are free text and may contain anything)."""
+    if not core.public_mode():
+        return ids
+    mine = set(st.session_state.get("my_cases", []))
+    return [i for i in ids if i in mine]
+
+
+def _key_section(cfg: core.AppConfig) -> bool:
+    """'Use your own API key'. Returns True if an LLM is usable in this session."""
+    public = core.public_mode()
+    env_llm = (not public) and core.llm_available()
+    with st.sidebar.expander("Use your own API key", expanded=public and not session_key(), icon="🔑"):
+        st.caption("Used only in this browser session to call the provider directly. Never stored, logged or shared. "
+                   "Remove it with Clear, or close the tab. Use a key with a spend limit.")
+        provider = st.radio("Provider", list(BYOK_MODELS), horizontal=True, key="byok_provider",
+                            format_func=lambda p: "OpenAI" if p == "openai" else "Anthropic")
+        model = st.selectbox("Model", BYOK_MODELS[provider], key="byok_model")
+        key = st.text_input("API key", type="password", key="byok_input", placeholder="sk-…")
+        c1, c2 = st.columns(2)
+        if c1.button("Use key", disabled=not key.strip(), width="stretch"):
+            st.session_state["byok"] = {"provider": provider, "model": model, "key": key.strip()}
+            st.session_state.pop("_session_agents", None)
+            st.session_state["byok_input"] = ""  # do not keep the raw value in the widget
+            st.rerun()
+        if c2.button("Clear", width="stretch"):
+            st.session_state.pop("byok", None)
+            st.session_state.pop("_session_agents", None)
+            st.rerun()
+        if session_key():
+            b = st.session_state["byok"]
+            st.success(f"Using your {b['provider']} key ({b['model']}) for this session.", icon="✅")
+    if session_key():
+        b = st.session_state["byok"]
+        cfg.provider, cfg.model = b["provider"], b["model"]
+        return True
+    return env_llm
+
+
 def sidebar() -> tuple[str, dict]:
     """Returns (mode, run_config). Mode: 'live' runs the agent; 'replay' plays recorded LLM runs (no API key)."""
     st.sidebar.header("Settings")
-    has_llm = core.llm_available()
     mode = st.sidebar.radio("Mode", ["live", "replay"], horizontal=True,
                             format_func=lambda m: "Live agent" if m == "live" else "Recorded LLM runs",
                             help="Recorded runs are real LLM agent runs saved earlier; they need no API key.")
     cfg = core.AppConfig()
+    if core.public_mode():
+        cfg.provider, cfg.model = "openai", "gpt-5.4-mini"  # display defaults; server env keys are never used here
     if mode == "live":
+        has_llm = _key_section(cfg)
         cfg.brain = st.sidebar.radio("Brain", ["rules", "llm"], horizontal=True, disabled=not has_llm,
+                                     index=1 if has_llm and session_key() else 0,
                                      format_func=lambda b: "Rules (offline)" if b == "rules" else f"LLM ({cfg.model})",
-                                     help=None if has_llm else "No API key configured: the rule brain runs offline.")
+                                     help=None if has_llm else "Add your own API key above to run the LLM agent.")
         cfg.evidence_mode = st.sidebar.radio("Evidence gathering", ["plan", "agent"], horizontal=True,
                                              disabled=cfg.brain != "llm",
                                              format_func=lambda e: "Scripted plan" if e == "plan" else "LLM agent loop")
@@ -108,26 +175,38 @@ def render_events(events, delay: float = 0.0, keep_open: bool = True) -> dict:
     """Show a case step by step. Returns the last event (done / interrupt). keep_open: leave the trace expanded."""
     last = {}
     with st.status("Agent working…", expanded=True) as status:
-        for ev in events:
-            last = ev
-            if ev["type"] == "start":
-                st.caption(f"case **{ev['case_id']}** · brain {ev['config']['brain']} · evidence {ev['config']['evidence_mode']} "
-                           f"· policy {ev['config']['kb_version']}")
-            elif ev["type"] == "resume":
-                st.caption(f"resuming **{ev['case_id']}** with the officer's verdict: {ev['verdict']}")
-            elif ev["type"] == "step":
-                status.update(label=ev["label"] + "…")
-                with st.container(border=True):
-                    st.markdown(f"**{ev['label']}**")
-                    _step_detail(ev["node"], ev["update"])
-            if delay:
-                time.sleep(delay)
+        try:
+            for ev in events:
+                last = ev
+                _render_event(ev, status)
+                if delay:
+                    time.sleep(delay)
+        except Exception as e:  # provider errors (bad key, rate limit...) shown without the key
+            status.update(label="Stopped: the model call failed", state="error", expanded=True)
+            st.error(f"{type(e).__name__}: {core.mask(str(e), session_key())}")
+            return {"type": "error"}
         status.update(label="Waiting for a dispute officer" if last.get("type") == "interrupt" else "Done: agent steps",
                       state="complete", expanded=keep_open)  # the trace is usually the interesting part
     return last
 
 
+def _render_event(ev: dict, status) -> None:
+    if ev["type"] == "start":
+        remember_case(ev["case_id"])
+        st.caption(f"case **{ev['case_id']}** · brain {ev['config']['brain']} · evidence {ev['config']['evidence_mode']} "
+                   f"· policy {ev['config']['kb_version']}")
+    elif ev["type"] == "resume":
+        st.caption(f"resuming **{ev['case_id']}** with the officer's verdict: {ev['verdict']}")
+    elif ev["type"] == "step":
+        status.update(label=ev["label"] + "…")
+        with st.container(border=True):
+            st.markdown(f"**{ev['label']}**")
+            _step_detail(ev["node"], ev["update"])
+
+
 def show_outcome(last: dict) -> None:
+    if last.get("type") == "error":
+        return
     if last.get("type") == "interrupt":
         p = last["payload"]
         st.info(f"**Sent to a dispute officer.** {p.get('reason')}\n\nCase **{last['case_id']}** is in the Review queue.", icon="🧑‍⚖️")
@@ -137,7 +216,8 @@ def show_outcome(last: dict) -> None:
     st.markdown("**Reply to the customer**")
     st.info(s.get("response_draft", ""), icon="✉️")
     u = s.get("usage") or {}
-    st.caption(f"{u.get('llm_calls', 0)} LLM calls · ${u.get('cost_usd', 0):.4f} · policy {s.get('kb_version')} · "
+    cost = f"${u.get('cost_usd', 0):.4f}" if u.get("cost_usd") or not u.get("llm_calls") else "cost not tracked for this provider"
+    st.caption(f"{u.get('llm_calls', 0)} LLM calls · {cost} · policy {s.get('kb_version')} · "
                f"cited {', '.join(s.get('cited_clauses') or [])}")
 
 
