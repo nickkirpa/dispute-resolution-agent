@@ -34,7 +34,8 @@ def render() -> None:
         with st.form("verdict"):
             decision = st.radio("Your decision", ["refund", "reject", "request_info", "escalate"],
                                 format_func=lambda d: ui.DECISION_STYLE[d][0])
-            amount = st.number_input("Refund amount (EUR)", min_value=0.0, value=float(q["refund_amount"]), step=1.0)
+            amount = st.number_input("Refund amount (EUR)", min_value=0.0, value=core.suggested_refund(case), step=1.0,
+                                     help="Pre-filled with what policy would refund for this evidence")
             note = st.text_input("Note for the audit trail", placeholder="e.g. called the customer, confirmed fraud")
             submitted = st.form_submit_button("Submit verdict", type="primary")
     if submitted:

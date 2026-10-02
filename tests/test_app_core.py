@@ -59,3 +59,20 @@ def test_demo_customers_have_transactions_and_suggestions():
     rows = {c["customer_id"]: c for c in core.demo_customers()}
     assert len(rows) == 14 and rows["C001"]["transactions"] and rows["C007"]["prior_disputes"] == 2
     assert all(c["suggested"] for c in rows.values())
+
+
+def test_officer_amount_defaults_to_policy_refund_when_model_escalated(tmp_path, monkeypatch):
+    """Regression (manual demo): when the LLM itself escalates, the proposed refund is 0 and the officer had to type 899."""
+    from dispute_agent.brain import DecisionProposal, RuleBrain
+    from dispute_agent.state import Decision
+
+    def decide(self, state):
+        return DecisionProposal(decision=Decision.ESCALATE, confidence=0.9, rationale="needs review", cited_clauses=["POL-GEN-04"])
+
+    monkeypatch.setattr(RuleBrain, "decide", decide)
+    agent, config, conn = _agent(tmp_path)
+    last = list(core.run_events(agent, config, "C006", core.SUGGESTED["C006"]))[-1]
+    case = core.get_case(agent, last["case_id"])
+    assert case["refund_amount"] == 0.0 and core.suggested_refund(case) == 899.0
+    dup = list(core.run_events(agent, config, "C001", core.SUGGESTED["C001"]))[-1]  # duplicate: refund one charge only
+    assert core.suggested_refund(core.get_case(agent, dup["case_id"])) == 9.99

@@ -189,6 +189,23 @@ def resume_events(agent, case_id: str, verdict: dict) -> Iterator[dict]:
     yield from _stream(agent, Command(resume=verdict), case_id)
 
 
+def suggested_refund(case: dict) -> float:
+    """Default amount for the officer's verdict: the agent's computed refund, or, when the model escalated without one,
+    what policy would refund given the gathered evidence (same deterministic calculator the agent uses)."""
+    if case.get("refund_amount"):
+        return float(case["refund_amount"])
+    if not case.get("dispute_type"):
+        return 0.0
+    from dispute_agent.state import Claim, DisputeType
+    from dispute_agent.tools import compute_refund
+
+    evidence = case.get("evidence") or []
+    matching = [e["data"] for e in evidence if e["kind"] == "matching_transaction"]
+    groups = next((e["data"]["groups"] for e in evidence if e["kind"] == "duplicate_transactions"), [])
+    claim = Claim(**case["claim"]) if case.get("claim") else None
+    return float(compute_refund(DisputeType(case["dispute_type"]), claim, matching, groups))
+
+
 def get_case(agent, case_id: str) -> dict:
     snap = agent.get_state({"configurable": {"thread_id": case_id}})
     return {"case_id": case_id, "next": list(snap.next), **jsonable(snap.values)} if snap.values else {}
