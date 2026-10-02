@@ -1,0 +1,40 @@
+{"id": "R01", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R02", "facts": true, "decision": true, "promises": true, "clarity": false, "send": true, "note": "asks again for merchant+amount the customer already gave; should say the charge wasn't found"}
+{"id": "R03", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": "y"}
+{"id": "R04", "facts": true, "decision": true, "promises": true, "clarity": false, "send": true, "note": "correct and precise, but cold; no empathy or next step; citing POL-NR-01 in a rejection is confusing"}
+{"id": "R05", "facts": false, "decision": false, "promises": false, "clarity": false, "send": false, "note": "contradicts itself: rejects, then says a provisional credit was issued"}
+{"id": "R07", "facts": false, "decision": false, "promises": false, "clarity": true, "send": false, "note": "wrong refund amount: 74.96 instead of 87.00 - 55.02 = 31.98"}
+{"id": "R08", "facts": false, "decision": false, "promises": false, "clarity": true, "send": false, "note": "wrong refund amount: 74.96 instead of 87.00 - 55.0"}
+{"id": "R09", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R10", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R11", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R13", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R14", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R15", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R16", "facts": false, "decision": true, "promises": true, "clarity": true, "send": false, "note": "The number of days is not correct to send and might be irritating for customer; message should be corrected with proper 30 days period"}
+{"id": "R17", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R18", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R19", "facts": true, "decision": true, "promises": true, "clarity": false, "send": true, "note": "same as R02: re-asks merchant+amount already given, doesn't say charge not found; possible fraud, but no reassurance"}
+{"id": "R20", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R21", "facts": true, "decision": true, "promises": true, "clarity": false, "send": true, "note": "correct amount and reason; doesn't say the refund is provisional (policy: provisional credit); no empathy or timing"}
+{"id": "R23", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R25", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R26", "facts": false, "decision": false, "promises": false, "clarity": false, "send": false, "note": "laims a provisional credit on a request_info decision; also re-asks merchant+amount already given\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D"}
+{"id": "R28", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R29", "facts": true, "decision": false, "promises": true, "clarity": false, "send": false, "note": "asks for nothing; customer will wait for the bank while the bank waits for them"}
+{"id": "R30", "facts": true, "decision": true, "promises": true, "clarity": false, "send": false, "note": "rude opening and closing (\"explained many times before\", \"read our policies before contacting us again\"); facts and decision correct"}
+{"id": "R31", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R32", "facts": true, "decision": false, "promises": true, "clarity": false, "send": false, "note": "asks for nothing; customer will wait for the bank while the bank waits for them"}
+{"id": "R34", "facts": true, "decision": true, "promises": true, "clarity": false, "send": false, "note": "Message is very rude"}
+{"id": "R35", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R36", "facts": true, "decision": false, "promises": false, "clarity": true, "send": false, "note": "Message contains invented promise"}
+{"id": "R37", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R38", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R39", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R40", "facts": true, "decision": true, "promises": true, "clarity": true, "send": true, "note": ""}
+{"id": "R12", "facts": false, "decision": false, "promises": false, "clarity": true, "send": false, "note": "wrong amount: 467.33 instead of 304.22"}
+{"id": "R33", "facts": false, "decision": false, "promises": false, "clarity": false, "send": false, "note": "good request for the expected amount, but ends claiming a provisional credit that wasn't decided"}
+{"id": "R06", "facts": false, "decision": false, "promises": false, "clarity": true, "send": false, "note": "Contains invented promise"}
+{"id": "R22", "facts": false, "decision": true, "promises": true, "clarity": true, "send": false, "note": "Wrong merchant"}
+{"id": "R24", "facts": false, "decision": true, "promises": true, "clarity": true, "send": false, "note": "Wrong merchant"}
+{"id": "R27", "facts": false, "decision": true, "promises": true, "clarity": true, "send": false, "note": "Wrong merchant"}

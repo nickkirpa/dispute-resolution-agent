@@ -71,6 +71,17 @@ What this shows:
 The strong model adds nothing here at 9× the cost. The weak model is where the guards matter: it exposed the one
 policy rule (repeat fraud claims) that had no code guard, which is now fixed.
 
+### LLM judge for reply quality, validated against human labels (40 replies, 15 with injected defects)
+
+| | Agreement on "OK to send" | Cohen's kappa | Injected defects caught |
+|---|---|---|---|
+| Human, first pass | – | – | 11/15 (missed every swapped merchant) |
+| Judge v1 (gpt-5.4-mini, 3-vote majority) | 82% | 0.65 | 15/15 |
+| Judge v2 (+ policy text, today, computed day counts) | 85% | 0.69 | 14/15 |
+
+The judge is a good screen for objective errors (wrong amount or merchant, contradictions, invented promises) but weak
+on tone (kappa ≤ 0.24) and arithmetic. v2 was adjusted on the same 40 replies, so treat its numbers as optimistic.
+
 ### Policy update without code change (policy-change set: 40 human-reviewed boundary cases)
 
 Policy v2 shortens the filing window (120 → 90 days) and lowers the human-review threshold (500 → 300 EUR). The rule

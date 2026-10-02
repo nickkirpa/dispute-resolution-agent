@@ -137,7 +137,13 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
 - [x] Comparisons on golden_v1 (203 cases): rules 84.2% · nano 87.2% (after fix; see Findings) · **mini 100% ± 0 over 3 runs,
       $0.0026, 4.1 s** · mini + router 100% ± 0, $0.0024, 3.8 s · gpt-5.5 100%, $0.023 (9×), 8.5 s · mini agent bm25 100%
       vs hybrid 100% (no difference, as the retrieval eval predicted). `--per-scenario N` probes cost before full runs
-- [ ] If an LLM judge is used for reply quality, **validate it against my own labels** (report agreement)
+- [x] LLM judge for reply quality (`eval/judge/`), **validated against my own labels**: 40 replies (25 real + 15 with defects
+      injected by code, blind), 5 yes/no questions, adjudication of disagreements (I re-checked 4, all my misses).
+      "OK to send" with a 3-vote majority: judge v1 82% agreement / kappa 0.65; v2 (+ today's date, policy text and values,
+      ledger-derived day counts) 85% / 0.69, facts kappa 0.47 → 0.68. Both judges caught 15/15 and 14/15 injected defects;
+      on my first pass I caught 11/15 (I missed every wrong merchant). Weak spots: tone (kappa 0.13–0.24), arithmetic
+      (missed "40 days" when it was 30), run-to-run variance. v2 was tuned on the same 40 replies, so its scores are optimistic.
+      Verdict: an automated screen with human spot checks, not the final word
 - [x] GitHub Actions: `ci.yml` (tests + rule-brain evals with `--min-accuracy` / `--max-unsafe` gates on every push, green);
       `llm-eval.yml` on demand only, personal key via secrets (never the employer key)
 
@@ -173,6 +179,16 @@ Write down what broke and what fixed it. This is README and interview material.
   the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
   didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
   On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-02: validating the LLM judge.** The surprise was on the human side: on a first pass I missed all 3 replies
+  with a swapped merchant name, and one invented "24-hour guarantee". The judge caught them. After adjudication we
+  agreed on all 15 defects. The judge's own failures were systematic: (1) false alarms when it lacked context (it called
+  the policy's "provisional credit" an invented promise); fixed by giving it the policy text. (2) Blind to a wrong day
+  count even when given the correct number. (3) Lenient on tone. (4) Different verdicts across runs, so majority-vote it.
+  Lesson: validate the judge like a model (labels, kappa, per-defect recall), and validate the human labels too.
+- **2026-10-02: reply-quality findings from labelling** (none are caught by the code checks; candidates for the reply
+  prompt): request_info replies re-ask for details the customer already gave and don't say the charge wasn't found;
+  rejections lack empathy and a next step (e.g. "cancel the subscription with the merchant", POL-DUP-02); a refund
+  reply omitted "provisional"; one real reply stated "40 days" for a 30-day gap (fix: give the writer computed facts).
 - **2026-10-02: the cheap model found a guard gap.** gpt-5.4-nano refunded 2 "unauthorized" claims from customers with
   2+ prior fraud claims (POL-UNA-02 says escalate). mini and gpt-5.5 never made that mistake, so the gap stayed invisible.
   An audit of every refund-forbidding rule found it was the **only** rule without a code guard. Added the guard, with the
