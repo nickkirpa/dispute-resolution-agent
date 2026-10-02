@@ -10,11 +10,12 @@ with your own OpenAI or Anthropic key (kept in your browser session only).
 
 ![Demo: three live disputes handled by the LLM agent loop (gpt-5.4-mini): a duplicate charge refunded, a monthly subscription "duplicate" rejected with a next step, and an 899 EUR unrecognised payment sent to a human, approved in the review queue and resumed](docs/demo.gif)
 
-*Three live cases with the LLM agent loop (gpt-5.4-mini, policy v2), about 90 seconds:*
+*Three live cases with the LLM agent loop (gpt-5.4-mini, policy v2), then the results page, about 3 minutes ([sharper MP4](docs/demo.mp4); re-record with `scripts/record_demo.py`):*
 1. *Duplicate SpotiTunes charge: the agent finds the two charges a day apart and refunds 9.99 EUR.*
 2. *Netflux "charged twice": the charges are a month apart, so it is rejected as a subscription, with the next step.*
 3. *899 EUR unrecognised LuxWatch payment: above the 300 EUR review threshold, so it goes to the review queue. The officer
-   approves it, and the case resumes from its checkpoint to write and check the reply.*
+   approves the pre-filled 899 EUR, and the case resumes from its checkpoint to write and check the reply.*
+4. *Results: accuracy and cost per configuration, failure causes, router vs LLM, judge agreement, retrieval.*
 
 ## Headline results
 
