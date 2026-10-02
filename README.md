@@ -8,10 +8,13 @@ code**.
 **[▶ Live demo](https://dispute-resolution-agent-yycapp6ubuxabyf8trjcyrv.streamlit.app)**: runs offline with the rule brain, plays recorded LLM agent runs, and runs the live LLM agent
 with your own OpenAI or Anthropic key (kept in your browser session only).
 
-![Demo: an 899 EUR unauthorized-payment claim is investigated by the agent, sent to a human by the review guard, approved by the officer, and answered](docs/demo.gif)
+![Demo: three live disputes handled by the LLM agent loop (gpt-5.4-mini): a duplicate charge refunded, a monthly subscription "duplicate" rejected with a next step, and an 899 EUR unrecognised payment sent to a human, approved in the review queue and resumed](docs/demo.gif)
 
-*A recorded run in the Streamlit demo: the agent investigates (5 tool calls), the review threshold sends the 899 EUR case
-to a dispute officer, the officer approves, and the case resumes from its checkpoint to write and check the reply.*
+*Three live cases with the LLM agent loop (gpt-5.4-mini, policy v2), about 90 seconds:*
+1. *Duplicate SpotiTunes charge: the agent finds the two charges a day apart and refunds 9.99 EUR.*
+2. *Netflux "charged twice": the charges are a month apart, so it is rejected as a subscription, with the next step.*
+3. *899 EUR unrecognised LuxWatch payment: above the 300 EUR review threshold, so it goes to the review queue. The officer
+   approves it, and the case resumes from its checkpoint to write and check the reply.*
 
 ## Headline results
 
