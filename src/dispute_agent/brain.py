@@ -129,7 +129,7 @@ class RuleBrain:
         if t == DisputeType.NOT_RECEIVED:
             return DecisionProposal(decision=Decision.REFUND, confidence=0.85, rationale="Not delivered and merchant already contacted.", cited_clauses=["POL-NR-01"])
         if t == DisputeType.UNAUTHORIZED:
-            if hist.get("unauthorized_disputes_last_12m", 0) >= 2:
+            if hist.get("unauthorized_disputes_last_12m", 0) >= state.policy_params["repeat_unauthorized_claims"]:
                 return DecisionProposal(decision=Decision.ESCALATE, confidence=0.9, rationale="Repeated unauthorized claims in 12 months.", cited_clauses=["POL-UNA-02"])
             return DecisionProposal(decision=Decision.REFUND, confidence=0.85, rationale="Customer reports an unauthorized transaction.", cited_clauses=["POL-UNA-01"])
         if t == DisputeType.WRONG_AMOUNT:

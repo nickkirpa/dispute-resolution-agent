@@ -97,7 +97,7 @@ def clause_applies(clause_id: str, state: CaseState, decision: Decision, needs_h
         "POL-DUP-02": bool(state.evidence_of("no_duplicates")),
         "POL-NR-01": bool(state.claim and state.claim.contacted_merchant),
         "POL-NR-02": "merchant_contact" in state.missing_evidence,
-        "POL-UNA-02": bool(hist and hist.data.get("unauthorized_disputes_last_12m", 0) >= 2),
+        "POL-UNA-02": bool(hist and hist.data.get("unauthorized_disputes_last_12m", 0) >= kb.param("repeat_unauthorized_claims")),
         "POL-REF-01": not state.evidence_of("merchant_refunds"),
         "POL-REF-02": bool(state.evidence_of("merchant_refunds")),
     }
@@ -205,6 +205,12 @@ def build_graph(deps: Deps, checkpointer=None):
             window_days = deps.kb.param("filing_window_days")
             if window and window[0].data["days_since_transaction"] > window_days:
                 conflicts.append(f"filed after {window_days:.0f} days")
+            hist = state.evidence_of("customer_history")
+            repeat_limit = deps.kb.param("repeat_unauthorized_claims")
+            if (state.dispute_type == DisputeType.UNAUTHORIZED and hist
+                    and hist[0].data.get("unauthorized_disputes_last_12m", 0) >= repeat_limit):
+                conflicts.append(f"{hist[0].data['unauthorized_disputes_last_12m']} unauthorized claims in 12 months "
+                                 f"(>= {repeat_limit:.0f}, {deps.kb.param_source['repeat_unauthorized_claims']})")
             if conflicts:
                 reasons.append(f"guard: refund contradicts evidence ({'; '.join(conflicts)})")
 

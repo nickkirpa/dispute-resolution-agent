@@ -129,11 +129,17 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
       at the decide step, not routing errors
 
 ### Days 10–12: evaluation and comparisons
-- [ ] Metrics: decision accuracy, citation recall, tool calls per case, cost and latency per case, escalation rate
-- [ ] Failure taxonomy (wrong type, missed evidence, wrong policy, a refund that should not have happened)
-- [ ] Comparisons: RuleBrain vs LLMBrain; cheap vs strong model; router on vs off; BM25 vs hybrid retrieval
+- [x] Metrics: decision accuracy, citation recall, tool calls per case, cost and latency per case, escalation rate (all in
+      every eval report, plus unsafe refunds, guard interventions, coverage fills, dropped citations, router share)
+- [x] Failure taxonomy (`eval/failure_taxonomy.py`, printed by every eval): one primary cause per failed case. Over all LLM
+      runs so far: **0 unsafe refunds with mini, 0 wrong types, 0 wrong amounts**; 57% of failures are the model
+      over-escalating (safe direction)
+- [x] Comparisons on golden_v1 (203 cases): rules 84.2% · nano 87.2% (after fix; see Findings) · **mini 100% ± 0 over 3 runs,
+      $0.0026, 4.1 s** · mini + router 100% ± 0, $0.0024, 3.8 s · gpt-5.5 100%, $0.023 (9×), 8.5 s · mini agent bm25 100%
+      vs hybrid 100% (no difference, as the retrieval eval predicted). `--per-scenario N` probes cost before full runs
 - [ ] If an LLM judge is used for reply quality, **validate it against my own labels** (report agreement)
-- [ ] GitHub Actions: tests plus the RuleBrain eval on every push; the LLM eval runs on demand
+- [x] GitHub Actions: `ci.yml` (tests + rule-brain evals with `--min-accuracy` / `--max-unsafe` gates on every push, green);
+      `llm-eval.yml` on demand only, personal key via secrets (never the employer key)
 
 ### Days 13–14: presentation
 - [ ] README: architecture diagram, results table, design decisions ("why a state machine and not a ReAct loop")
@@ -167,6 +173,11 @@ Write down what broke and what fixed it. This is README and interview material.
   the merchant credit (evidence `merchant_refunds` was present). The refund amount is legitimately non-zero there, so guard 2
   didn't fire. Added guard 2b (a refund that contradicts hard evidence goes to a human) and the eval metric `unsafe_refund_rate`.
   On the next run the guard caught the same pattern on a different case (V1-0196).
+- **2026-10-02: the cheap model found a guard gap.** gpt-5.4-nano refunded 2 "unauthorized" claims from customers with
+  2+ prior fraud claims (POL-UNA-02 says escalate). mini and gpt-5.5 never made that mistake, so the gap stayed invisible.
+  An audit of every refund-forbidding rule found it was the **only** rule without a code guard. Added the guard, with the
+  threshold as a policy parameter (`repeat_unauthorized_claims=2`). nano rerun: 0 unsafe refunds. Lesson: test guards
+  with a weaker model too, because a strong model hides missing guards by not needing them.
 - **2026-10-02: router, honest framing.** The fine-tuned model is excellent at what it was trained for (93.2% on
   Banking77) and fast (9 ms vs 1.2 s), but (1) a large part of its lead over the LLM is my own label conventions, and
   (2) on longer, unfamiliar complaints it drops to 96.7%. Calibrated confidence makes it useful anyway: a 0.9 threshold

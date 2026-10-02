@@ -59,6 +59,18 @@ What this shows:
   evidence guards hold regardless of what the agent does.
 - *Unsafe refund* means money paid where policy says no. It is 0 in every configuration.
 
+### Model and configuration comparison (golden_v1, 203 cases)
+
+| Configuration | Decision acc. | Unsafe refunds | Cost / case | Latency |
+|---|---|---|---|---|
+| gpt-5.4-nano, plan | 87.2% | 0% (1% before the POL-UNA-02 guard) | $0.001 | 5.1 s |
+| **gpt-5.4-mini, plan (3 runs)** | **100% ± 0** | 0% | $0.0026 | 4.1 s |
+| gpt-5.4-mini, plan + router (3 runs) | 100% ± 0 | 0% | $0.0024 | 3.8 s |
+| gpt-5.5, plan | 100% | 0% | $0.023 | 8.5 s |
+
+The strong model adds nothing here at 9× the cost. The weak model is where the guards matter: it exposed the one
+policy rule (repeat fraud claims) that had no code guard, which is now fixed.
+
 ### Policy update without code change (policy-change set: 40 human-reviewed boundary cases)
 
 Policy v2 shortens the filing window (120 → 90 days) and lowers the human-review threshold (500 → 300 EUR). The rule

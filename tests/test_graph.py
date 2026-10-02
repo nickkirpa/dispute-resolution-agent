@@ -251,3 +251,20 @@ def test_confident_router_skips_llm_classify_and_unsure_router_falls_back(monkey
     assert a["classified_by"] == "router" and a["decision"] == Decision.REFUND
     assert b["classified_by"] == "rules" and b["router_prediction"]["confidence"] == 0.4
     assert len(calls) == 1  # only the unsure case reached the brain's classify
+
+
+def test_repeat_unauthorized_claimant_is_never_auto_refunded():
+    """Regression: gpt-5.4-nano refunded repeat claimants (POL-UNA-02) and no guard covered that rule."""
+    from dispute_agent.brain import DecisionProposal
+
+    class Refunder(RuleBrain):
+        def decide(self, state):
+            return DecisionProposal(decision=Decision.REFUND, confidence=0.95, rationale="unauthorized", cited_clauses=["POL-UNA-01"])
+
+    led = build_fixture_ledger()
+    for version in ("v1", "v2"):
+        deps = Deps(brain=Refunder(led.merchants()), ledger=led, kb=KnowledgeBase(Settings().kb_dir, version))
+        out = run_case(build_graph(deps), CaseState(case_id=f"rep-{version}", customer_id="C007", as_of="2026-09-30",
+                       narrative="A charge of 34.50 EUR from PizzaNow on 2026-09-25 was not authorised by me."))
+        assert out["decision"] == Decision.ESCALATE and out["refund_amount"] == 0.0
+        assert "2 unauthorized claims in 12 months" in out["human_reason"] and "POL-UNA-02" in out["human_reason"]

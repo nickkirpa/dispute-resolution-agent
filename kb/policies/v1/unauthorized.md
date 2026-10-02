@@ -4,4 +4,5 @@ If the customer reports a transaction they did not make or authorize, the transa
 
 ## POL-UNA-02: Repeated unauthorized claims
 Applies to: unauthorized
+Parameters: repeat_unauthorized_claims=2
 If the customer has raised two or more unauthorized-transaction disputes in the last 12 months, the case is escalated to the fraud team instead of being refunded automatically.
