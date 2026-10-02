@@ -210,7 +210,7 @@ def main() -> None:
                 page.get_by_label("API key").fill(key)
                 page.get_by_role("button", name="Use key").click()
                 settle(page)
-                page.get_by_text("Using your").wait_for(timeout=10_000)
+                page.get_by_text("Using your").wait_for(state="attached", timeout=10_000)  # inside the now-collapsed expander
                 page.get_by_text("LLM agent loop").click()
                 settle(page)
             rec = Recorder(page, tmp)
