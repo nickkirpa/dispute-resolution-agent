@@ -67,6 +67,23 @@ def visible_cases(ids: list[str]) -> list[str]:
     return [i for i in ids if i in mine]
 
 
+def _use_key() -> None:
+    key = (st.session_state.get("byok_input") or "").strip()
+    st.session_state["byok_input"] = ""  # never keep the raw value in the widget
+    if not key:
+        st.session_state["byok_error"] = "Paste a key first."
+        return
+    st.session_state["byok"] = {"provider": st.session_state.get("byok_provider", "openai"),
+                                "model": st.session_state.get("byok_model") or BYOK_MODELS["openai"][0], "key": key}
+    st.session_state.pop("_session_agents", None)
+
+
+def _clear_key() -> None:
+    st.session_state["byok_input"] = ""
+    st.session_state.pop("byok", None)
+    st.session_state.pop("_session_agents", None)
+
+
 def _key_section(cfg: core.AppConfig) -> bool:
     """'Use your own API key'. Returns True if an LLM is usable in this session."""
     public = core.public_mode()
@@ -77,17 +94,14 @@ def _key_section(cfg: core.AppConfig) -> bool:
         provider = st.radio("Provider", list(BYOK_MODELS), horizontal=True, key="byok_provider",
                             format_func=lambda p: "OpenAI" if p == "openai" else "Anthropic")
         model = st.selectbox("Model", BYOK_MODELS[provider], key="byok_model")
-        key = st.text_input("API key", type="password", key="byok_input", placeholder="sk-…")
+        st.text_input("API key", type="password", key="byok_input", placeholder="sk-…")
         c1, c2 = st.columns(2)
-        if c1.button("Use key", disabled=not key.strip(), width="stretch"):
-            st.session_state["byok"] = {"provider": provider, "model": model, "key": key.strip()}
-            st.session_state.pop("_session_agents", None)
-            st.session_state["byok_input"] = ""  # do not keep the raw value in the widget
-            st.rerun()
-        if c2.button("Clear", width="stretch"):
-            st.session_state.pop("byok", None)
-            st.session_state.pop("_session_agents", None)
-            st.rerun()
+        # Callbacks run before widgets are drawn on the next run, so they may clear the key field
+        # (assigning a widget's state after it is drawn raises StreamlitWidgetAlreadyInstantiatedError).
+        c1.button("Use key", on_click=_use_key, width="stretch")
+        c2.button("Clear", on_click=_clear_key, width="stretch")
+        if st.session_state.get("byok_error"):
+            st.warning(st.session_state.pop("byok_error"))
         if session_key():
             b = st.session_state["byok"]
             st.success(f"Using your {b['provider']} key ({b['model']}) for this session.", icon="✅")

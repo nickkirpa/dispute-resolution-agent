@@ -78,3 +78,42 @@ def test_public_mode_ignores_server_keys_and_isolates_sessions(tmp_path, monkeyp
 def test_mask_removes_key_from_messages():
     assert SECRET not in core.mask(f"401 Incorrect API key provided: {SECRET}", SECRET)
     assert "d4" not in core.mask(f"key ending ...{SECRET[-6:]}", SECRET).split("...")[-1].replace("***", "")
+
+
+def test_key_entry_flow_in_the_ui(tmp_path, monkeypatch):
+    """Regression: 'Use key' raised StreamlitWidgetAlreadyInstantiatedError (widget state set after drawing)."""
+    pytest.importorskip("streamlit")
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setenv("DISPUTE_AGENT_PUBLIC", "1")
+    db = str(tmp_path / "c.sqlite")
+
+    def script(view, db):
+        import importlib
+        import sys
+        from pathlib import Path
+
+        sys.path[:0] = [str(Path.cwd()), str(Path.cwd() / "src")]
+        from app import core
+
+        core.DB = Path(db)
+        importlib.import_module(f"app.views.{view}").render()
+
+    for view in ("customer", "trace", "officer", "policy", "metrics"):  # the sidebar (and key form) is on every page
+        at = AppTest.from_function(script, args=(view, db), default_timeout=120).run()
+        button = lambda label: next(b for b in at.button if b.label == label)  # noqa: E731
+        button("Use key").click().run()  # empty field: a warning, not a crash
+        assert not at.exception and any("Paste a key first" in w.value for w in at.warning)
+
+        at.text_input(key="byok_input").input(SECRET).run()
+        button("Use key").click().run()
+        assert not at.exception, (view, [e.value for e in at.exception])
+        assert at.session_state["byok"]["key"] == SECRET
+        assert at.session_state["byok_input"] == ""  # raw value wiped from the widget
+        if view != "metrics":  # pages with live settings: the LLM brain is now selectable and selected
+            brain = next(r for r in at.radio if r.label == "Brain")
+            assert not brain.disabled and brain.value == "llm"
+        assert all(SECRET not in m.value for m in at.markdown)  # never rendered
+
+        button("Clear").click().run()
+        assert not at.exception and "byok" not in at.session_state
