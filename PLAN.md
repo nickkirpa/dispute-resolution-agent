@@ -159,22 +159,33 @@ intake → classify → gather_evidence ⇄ tools → policy_check → decide
       Most remaining request_info "fails" are judge false alarms: it calls POL-NR-02's own 15-day instruction "invented"
 
 ### Days 13–14: presentation
-- [ ] README: architecture diagram, results table, design decisions ("why a state machine and not a ReAct loop")
-- [ ] **Streamlit demo app** (`app/`, `uv run streamlit run app/main.py`), reusing the agent code directly:
-  - [ ] **Customer view:** pick a demo customer, see their transactions, type a complaint, watch the agent work step by step
-        (live node / tool-call progress), see the decision and the drafted reply
-  - [ ] **Dispute officer view:** queue of cases waiting for human review (from the SQLite checkpoints); open a case to see
-        evidence, cited clauses, proposed decision and guard reasons; approve / reject / ask the customer, then the case resumes
-  - [ ] **Agent trace panel:** every tool call with its reason, observation, cost and latency; coverage fills and dropped citations
-  - [ ] **Policy switch:** run the same complaint under v1 and v2 side by side (shows the living KB)
-  - [ ] **Metrics page:** eval results (accuracy, unsafe refunds, cost/latency, plan vs agent, policy change) from `eval/results`
-  - [ ] Settings in the sidebar: brain (rules / LLM), evidence mode (plan / agent), policy version, retrieval mode
-  - [ ] **Public hosting** (Streamlit Community Cloud or Hugging Face Spaces). **No employer API key in the hosted app.** Use the
-        rule brain plus **recorded replays** of real agent runs (saved traces played back step by step, $0, no key), or a
-        personal key with a hard spend limit and rate limiting. Decide before hosting
-  - [ ] Tests for the app's non-UI logic (replay loading, queue listing); the demo must work offline with the rule brain
-- [ ] A short demo GIF of the **Streamlit app** (customer complaint → human review → resume), embedded in the README
-- [ ] Resume bullet: **use only measured numbers**; add the live demo link once hosted
+- [x] README rewritten: demo GIF, headline results, Mermaid architecture diagram (validated with mermaid-cli), design
+      decisions, all results from the latest runs, limitations
+- [x] **Streamlit demo app** (`app/`, `uv run streamlit run app/main.py`), reusing the agent code directly:
+  - [x] **Customer view:** demo accounts with transactions, complaint box, live step-by-step trace with tool calls
+  - [x] **Dispute officer view:** queue from the SQLite checkpoints, evidence, guard or agent reason, verdict form that
+        resumes the case with its stored config
+  - [x] **Case trace:** tool calls (args, reasons, observations), evidence, policy version and parameters, cited and
+        dropped clauses, guards, reply checks, cost, raw state
+  - [x] **Policy switch:** same complaint under v1 and v2 side by side (boundary demo customers C013 / C014)
+  - [x] **Results page:** Altair charts (validated palette, single-series bars, value labels, tooltips) and tables from a
+        committed metrics snapshot (`app/build_metrics.py` reads eval reports)
+  - [x] Sidebar settings: brain, evidence mode, policy version, router; LLM options disabled without a key
+  - [x] **Recorded replays:** 7 real LLM agent runs (`app/record_replays.py`), including full pause / review / resume
+        flows, played back without an API key
+  - [x] Tests: 5 core + 6 headless UI tests (Streamlit AppTest); works offline with the rule brain
+  - [ ] **Public hosting** (Streamlit Community Cloud or Hugging Face Spaces). **Decision pending (me):** rule brain plus
+        recorded replays (no key, $0) vs a personal key with a spend limit. Never the employer key
+- [x] Demo GIF of the app (`docs/demo.gif`, recorded LLM run: investigation → guard → officer → resume → reply)
+- [ ] Resume bullet: draft below; **add the live demo link once hosted**
+
+Resume bullet (draft, measured numbers only):
+> **Dispute Resolution Agent** (Python, LangGraph, PyTorch, OpenAI/Claude APIs, Streamlit) · github.com/nickkirpa/dispute-resolution-agent
+> Built a state-driven LLM agent that resolves card-payment disputes end to end: LLM-chosen tool calls under a budget, a
+> versioned policy knowledge base with hybrid retrieval, human-in-the-loop review with durable checkpoints, and code-
+> enforced money guards. On 203 human-reviewed cases: 100% decision accuracy over 3 runs, 0% unsafe refunds, $0.0024/case.
+> Fine-tuned a ModernBERT router (93.2% on Banking77, 9 ms vs 1.2 s for the LLM) and validated an LLM judge against human
+> labels (Cohen's kappa 0.69). A policy update changed exactly the 32 required decisions with no code change.
 
 ## Findings log
 Write down what broke and what fixed it. This is README and interview material.
