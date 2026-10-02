@@ -36,7 +36,7 @@ from dispute_agent.state import CHECKPOINT_TYPES, CaseState  # noqa: E402
 from dispute_agent.tools import Ledger, build_kb  # noqa: E402
 from eval.fixtures import CUSTOMERS, DISPUTES, TXNS  # noqa: E402
 
-DB = ROOT / "data" / "app_cases.sqlite"
+DB = Path(os.getenv("DISPUTE_AGENT_DB") or ROOT / "data" / "app_cases.sqlite")  # override for throwaway runs (demo recording)
 REPLAYS = ROOT / "app" / "replays"
 AS_OF = date(2026, 9, 30)
 
